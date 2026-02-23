@@ -1,0 +1,17 @@
+{
+  "statTypes": [
+    "anomaly",
+    "category_breakdown",
+    "trend"
+  ],
+  "categoryCount": 5,
+  "insightCount": 8,
+  "scoringWeights": {
+    "novelty": 0.9,
+    "actionability": 0.9,
+    "specificity": 0.95
+  },
+  "promptVersion": "v1",
+  "promptLength": 2148,
+  "promptHash": "1a9b044e18f89ad481912939586250e41bce217257b57e3ef24498486791a252"
+}

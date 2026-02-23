@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:18.2
+    environment:
+      POSTGRES_USER: app_admin
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: analytics
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app_admin -d analytics']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://app_user:app@db:5432/analytics
+      DATABASE_ADMIN_URL: postgresql://app_admin:app@db:5432/analytics
+      REDIS_URL: redis://redis:6379
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      - api
+    env_file: .env
+    environment:
+      API_INTERNAL_URL: http://api:3001
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+
+volumes:
+  pgdata:

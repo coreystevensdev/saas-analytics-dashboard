@@ -1,0 +1,72 @@
+import postgres, { type Sql } from 'postgres';
+import { DATABASE_ADMIN_URL } from './config';
+
+// seed org created by apps/api/src/db/seed.ts
+export const SEED_ORG_ID = 1;
+
+export const TEST_USER = {
+  email: 'e2e-test@example.com',
+  name: 'E2E Test User',
+  googleId: 'e2e-test-google-id',
+  role: 'owner' as const,
+  isAdmin: true,
+} as const;
+
+export const FREE_TIER_USER = {
+  email: 'e2e-free@example.com',
+  name: 'E2E Free User',
+  googleId: 'e2e-free-google-id',
+  role: 'member' as const,
+  isAdmin: false,
+} as const;
+
+let _sql: Sql | null = null;
+
+function getConnection(): Sql {
+  if (!_sql) _sql = postgres(DATABASE_ADMIN_URL, { max: 2 });
+  return _sql;
+}
+
+export async function cleanupFixtureConnection(): Promise<void> {
+  if (_sql) {
+    await _sql.end();
+    _sql = null;
+  }
+}
+
+/**
+ * Inserts a test user + org membership, returning the userId.
+ * Upserts on email to survive multiple test runs.
+ */
+export async function ensureTestUser(
+  user: typeof TEST_USER | typeof FREE_TIER_USER,
+  orgId = SEED_ORG_ID,
+): Promise<{ userId: number; orgId: number }> {
+  const sql = getConnection();
+
+  const [row] = await sql`
+    INSERT INTO users (email, name, google_id, is_platform_admin)
+    VALUES (${user.email}, ${user.name}, ${user.googleId}, ${user.isAdmin})
+    ON CONFLICT (email) DO UPDATE SET
+      is_platform_admin = EXCLUDED.is_platform_admin,
+      name = EXCLUDED.name
+    RETURNING id
+  `;
+
+  const userId = row.id as number;
+
+  await sql`
+    INSERT INTO user_orgs (user_id, org_id, role)
+    VALUES (${userId}, ${orgId}, ${user.role})
+    ON CONFLICT (user_id, org_id) DO UPDATE SET role = EXCLUDED.role
+  `;
+
+  return { userId, orgId };
+}
+
+/** Minimal valid CSV for upload tests */
+export const SAMPLE_CSV = `date,amount,category
+2025-01-15,1200.00,Revenue
+2025-02-15,1350.00,Revenue
+2025-03-15,800.00,Marketing
+`;
