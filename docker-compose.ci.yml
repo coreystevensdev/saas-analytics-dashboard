@@ -1,0 +1,21 @@
+# CI-only overrides — port exposure without dev-mode targets.
+# Used with: docker compose -f docker-compose.yml -f docker-compose.ci.yml up
+# Keeps production build targets from the base compose while exposing
+# ports for curl health checks and Playwright.
+
+services:
+  db:
+    ports:
+      - '5432:5432'
+
+  redis:
+    ports:
+      - '6379:6379'
+
+  api:
+    ports:
+      - '3001:3001'
+
+  web:
+    ports:
+      - '3000:3000'

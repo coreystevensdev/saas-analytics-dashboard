@@ -1,0 +1,104 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1771967797048,
+      "tag": "0000_cold_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771967817226,
+      "tag": "0001_add-rls-policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771975570142,
+      "tag": "0002_gorgeous_lizard",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772074790946,
+      "tag": "0003_nervous_dorian_gray",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772074800000,
+      "tag": "0004_add-rls-analytics-invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772127100903,
+      "tag": "0005_graceful_betty_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772127200000,
+      "tag": "0006_add-rls-datasets-datarows",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772783117632,
+      "tag": "0007_dear_senator_kelly",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774588800000,
+      "tag": "0008_add_subscriptions_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774675200000,
+      "tag": "0009_add_shares_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774675300000,
+      "tag": "0010_add-rls-shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774675400000,
+      "tag": "0011_add-rls-subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774675500000,
+      "tag": "0012_add-subscription-unique-constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774675600000,
+      "tag": "0013_fix-ai-summaries-rls-policy",
+      "breakpoints": true
+    }
+  ]
+}
