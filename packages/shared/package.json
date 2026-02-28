@@ -28,8 +28,5 @@
   },
   "dependencies": {
     "zod": "3.23.8"
-  },
-  "devDependencies": {
-    "vitest": "^3.2.1"
   }
 }

@@ -24,11 +24,6 @@ vi.mock('../../db/queries/userOrgs.js', () => ({
   getUserOrgs: mockGetUserOrgs,
 }));
 
-vi.mock('../../lib/db.js', () => ({
-  db: {},
-  dbAdmin: {},
-}));
-
 vi.mock('../../config.js', () => ({
   env: {
     GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
@@ -162,7 +157,7 @@ describe('googleOAuth', () => {
         googleId: 'google-123',
         avatarUrl: 'https://example.com/photo.jpg',
       });
-      expect(mockAddMember).toHaveBeenCalledWith(10, 1, 'owner', expect.anything());
+      expect(mockAddMember).toHaveBeenCalledWith(10, 1, 'owner');
     });
 
     it('returns existing user without creating duplicate org', async () => {

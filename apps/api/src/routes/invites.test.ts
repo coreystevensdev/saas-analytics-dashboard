@@ -16,10 +16,6 @@ vi.mock('../services/auth/inviteService.js', () => ({
   getActiveInvitesForOrg: mockGetActiveInvitesForOrg,
 }));
 
-vi.mock('../lib/rls.js', () => ({
-  withRlsContext: vi.fn((_orgId: number, _isAdmin: boolean, fn: (tx: unknown) => Promise<unknown>) => fn({})),
-}));
-
 vi.mock('../config.js', () => ({
   env: {
     NODE_ENV: 'test',
@@ -107,7 +103,7 @@ describe('GET /invites', () => {
 
     expect(res.status).toBe(200);
     expect(body.data).toHaveLength(2);
-    expect(mockGetActiveInvitesForOrg).toHaveBeenCalledWith(10, expect.anything());
+    expect(mockGetActiveInvitesForOrg).toHaveBeenCalledWith(10);
   });
 
   it('member gets 403 — only owners can list invites', async () => {
@@ -159,7 +155,7 @@ describe('POST /invites', () => {
     });
 
     expect(res.status).toBe(201);
-    expect(mockGenerateInvite).toHaveBeenCalledWith(10, 1, 14, expect.anything());
+    expect(mockGenerateInvite).toHaveBeenCalledWith(10, 1, 14);
   });
 
   it('member gets 403 — only owners can create invites', async () => {

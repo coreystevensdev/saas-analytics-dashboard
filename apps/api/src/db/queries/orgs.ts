@@ -1,5 +1,4 @@
 import { eq } from 'drizzle-orm';
-import { SEED_ORG } from 'shared/constants';
 import { db } from '../../lib/db.js';
 import { orgs } from '../schema.js';
 
@@ -21,20 +20,4 @@ export async function findOrgById(orgId: number) {
   return db.query.orgs.findFirst({
     where: eq(orgs.id, orgId),
   });
-}
-
-let cachedSeedOrgId: number | null = null;
-
-export async function getSeedOrgId(): Promise<number> {
-  if (cachedSeedOrgId !== null) return cachedSeedOrgId;
-
-  const org = await findOrgBySlug(SEED_ORG.slug);
-  if (!org) throw new Error(`Seed org "${SEED_ORG.slug}" not found — has the seed script run?`);
-
-  cachedSeedOrgId = org.id;
-  return org.id;
-}
-
-export function resetSeedOrgCache(): void {
-  cachedSeedOrgId = null;
 }

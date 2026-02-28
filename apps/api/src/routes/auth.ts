@@ -12,7 +12,6 @@ import {
   rotateRefreshToken,
 } from '../services/auth/index.js';
 import * as refreshTokensQueries from '../db/queries/refreshTokens.js';
-import { dbAdmin } from '../lib/db.js';
 import { AUTH } from 'shared/constants';
 import { googleCallbackSchema } from 'shared/schemas';
 import { rateLimitAuth } from '../middleware/rateLimiter.js';
@@ -112,9 +111,9 @@ router.post('/auth/logout', rateLimitAuth, async (req: Request, res: Response) =
 
   if (rawToken) {
     const hash = createHash('sha256').update(rawToken).digest('hex');
-    const existing = await refreshTokensQueries.findByHash(hash, dbAdmin);
+    const existing = await refreshTokensQueries.findByHash(hash);
     if (existing) {
-      await refreshTokensQueries.revokeToken(existing.id, dbAdmin);
+      await refreshTokensQueries.revokeToken(existing.id);
       logger.info({ userId: existing.userId }, 'User logged out');
     }
   }

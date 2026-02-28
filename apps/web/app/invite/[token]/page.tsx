@@ -13,7 +13,7 @@ export default async function InvitePage({
   const { token } = await params;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <InviteAccept token={token} />
     </div>
   );

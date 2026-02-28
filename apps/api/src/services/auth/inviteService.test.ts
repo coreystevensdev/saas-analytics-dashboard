@@ -17,11 +17,6 @@ vi.mock('../../db/queries/userOrgs.js', () => ({
   findMembership: mockFindMembership,
 }));
 
-vi.mock('../../lib/db.js', () => ({
-  db: {},
-  dbAdmin: {},
-}));
-
 vi.mock('../../lib/logger.js', () => ({
   logger: {
     info: vi.fn(),
@@ -149,8 +144,8 @@ describe('inviteService', () => {
       const result = await redeemInvite(1, 10, 5);
 
       expect(result.alreadyMember).toBe(false);
-      expect(mockAddMember).toHaveBeenCalledWith(10, 5, 'member', expect.anything());
-      expect(mockMarkUsed).toHaveBeenCalledWith(1, 5, expect.anything());
+      expect(mockAddMember).toHaveBeenCalledWith(10, 5, 'member');
+      expect(mockMarkUsed).toHaveBeenCalledWith(1, 5);
     });
 
     it('skips adding member when already a member (idempotent)', async () => {
@@ -161,7 +156,7 @@ describe('inviteService', () => {
 
       expect(result.alreadyMember).toBe(true);
       expect(mockAddMember).not.toHaveBeenCalled();
-      expect(mockMarkUsed).toHaveBeenCalledWith(1, 5, expect.anything());
+      expect(mockMarkUsed).toHaveBeenCalledWith(1, 5);
     });
   });
 });

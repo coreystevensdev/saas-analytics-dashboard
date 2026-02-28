@@ -1,13 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { inviteRouter } from './invites.js';
-import { datasetsRouter } from './datasets.js';
-import { aiSummaryRouter } from './aiSummary.js';
-import { subscriptionsRouter } from './subscriptions.js';
-import { analyticsRouter } from './analytics.js';
-import { shareRouter } from './sharing.js';
-import { adminRouter } from './admin.js';
-import { roleGuard } from '../middleware/roleGuard.js';
 
 const protectedRouter = Router();
 
@@ -15,12 +8,8 @@ const protectedRouter = Router();
 protectedRouter.use(authMiddleware);
 
 protectedRouter.use('/invites', inviteRouter);
-protectedRouter.use('/datasets', datasetsRouter);
 
-protectedRouter.use('/ai-summaries', aiSummaryRouter);
-protectedRouter.use('/subscriptions', subscriptionsRouter);
-protectedRouter.use('/analytics', analyticsRouter);
-protectedRouter.use('/shares', shareRouter);
-protectedRouter.use('/admin', roleGuard('admin'), adminRouter);
+// Story 2+: mount dataset/AI/admin routes here
+// AI routes need rateLimitAi (per-user, 5/min) — see rateLimiter.ts
 
 export default protectedRouter;

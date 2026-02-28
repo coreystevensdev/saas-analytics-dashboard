@@ -2,13 +2,10 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
-  DATABASE_ADMIN_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   CLAUDE_API_KEY: z.string().min(1),
-  CLAUDE_MODEL: z.string().default('claude-sonnet-4-5-20250929'),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
-  STRIPE_PRICE_ID: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   JWT_SECRET: z.string().min(32),

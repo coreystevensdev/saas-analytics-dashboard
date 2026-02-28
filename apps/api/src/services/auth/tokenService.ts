@@ -6,7 +6,6 @@ import { AuthenticationError } from '../../lib/appError.js';
 import * as refreshTokensQueries from '../../db/queries/refreshTokens.js';
 import * as usersQueries from '../../db/queries/users.js';
 import * as userOrgsQueries from '../../db/queries/userOrgs.js';
-import { dbAdmin } from '../../lib/db.js';
 import { AUTH } from 'shared/constants';
 import { jwtPayloadSchema } from 'shared/schemas';
 import type { JwtPayload, Role } from 'shared/types';
@@ -67,7 +66,7 @@ export async function createTokenPair(
     userId,
     orgId,
     expiresAt,
-  }, dbAdmin);
+  });
 
   logger.info({ userId, orgId }, 'Token pair created');
 
@@ -76,29 +75,29 @@ export async function createTokenPair(
 
 export async function rotateRefreshToken(rawToken: string) {
   const hash = createHash('sha256').update(rawToken).digest('hex');
-  const existing = await refreshTokensQueries.findByHash(hash, dbAdmin);
+  const existing = await refreshTokensQueries.findByHash(hash);
 
   if (!existing) {
     // Token not valid — check if it was previously revoked (reuse attack detection)
-    const revoked = await refreshTokensQueries.findAnyByHash(hash, dbAdmin);
+    const revoked = await refreshTokensQueries.findAnyByHash(hash);
     if (revoked) {
       logger.warn(
         { userId: revoked.userId, tokenHashPrefix: hash.slice(0, 8) },
         'Refresh token reuse detected — revoking all tokens for user',
       );
-      await refreshTokensQueries.revokeAllForUser(revoked.userId, dbAdmin);
+      await refreshTokensQueries.revokeAllForUser(revoked.userId);
     }
     throw new AuthenticationError('Invalid refresh token');
   }
 
-  await refreshTokensQueries.revokeToken(existing.id, dbAdmin);
+  await refreshTokensQueries.revokeToken(existing.id);
 
   const user = await usersQueries.findUserById(existing.userId);
   if (!user) {
     throw new AuthenticationError('User not found');
   }
 
-  const memberships = await userOrgsQueries.getUserOrgs(user.id, dbAdmin);
+  const memberships = await userOrgsQueries.getUserOrgs(user.id);
   const membership = memberships.find((m) => m.orgId === existing.orgId);
   if (!membership) {
     throw new AuthenticationError('Organization membership not found');
