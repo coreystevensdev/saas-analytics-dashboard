@@ -1,6 +1,6 @@
 # DashboardShell.tsx — Interview-Ready Documentation
 
-> Source file: `apps/web/app/dashboard/DashboardShell.tsx` (~293 lines)
+> Source file: `apps/web/app/dashboard/DashboardShell.tsx` (~207 lines)
 
 ---
 
@@ -8,9 +8,9 @@
 
 DashboardShell is the top-level client component that owns the dashboard's data lifecycle, filter state, and loading presentation. It accepts server-fetched `initialData` as a prop, hands it to SWR as `fallbackData` so the page renders instantly with zero loading spinners, then quietly revalidates in the background. Filter state (date range preset + expense category) is encoded directly into the SWR cache key — when filters change, the key changes, SWR treats it as a new request, and charts update with filtered data.
 
-Story 2.8 added the `DemoModeBanner` (4-state enum), FilterBar skeleton, and loading states. Story 3.3 replaced the `AiSummarySkeleton` with the full `AiSummaryCard` component, which handles both cached content (for anonymous visitors, passed as `cachedSummary` prop) and real-time SSE streaming (for authenticated users, driven by `datasetId` from the chart data response). The shell now has five distinct visual states: initial-loading-skeleton, loaded-with-data, filtered-empty, no-data-empty, and error — plus overlay-style additions (banner and AI card) that sit on top of those states.
+Story 2.8 added three meaningful pieces to that foundation: a `DemoModeBanner` that replaces the old inline demo indicator and renders conditionally based on a 4-state enum from the API, an `AiSummarySkeleton` that appears above the chart grid during initial cold loads, and a FilterBar skeleton (three pill-shaped placeholders) that fills the filter row while data is in flight. The shell now has five distinct visual states: initial-loading-skeleton, loaded-with-data, filtered-empty, no-data-empty, and error — plus two overlay-style additions (the banner and AI skeleton) that sit on top of those states.
 
-**How to say it in an interview:** "DashboardShell bridges server and client rendering by passing server-fetched data into SWR's fallbackData. Filter state is encoded into the SWR cache key so filter changes trigger automatic refetches. Story 3.3 replaced the AI skeleton with a full `AiSummaryCard` that handles both instant cached display (anonymous) and real-time SSE streaming (authenticated)."
+**How to say it in an interview:** "DashboardShell bridges server and client rendering by passing server-fetched data into SWR's fallbackData. Filter state is encoded into the SWR cache key so filter changes trigger automatic refetches. Story 2.8 added a proper DemoModeBanner driven by a 4-state enum, an AiSummarySkeleton for cold load feedback, and a FilterBar skeleton so nothing janks during initial data fetch."
 
 ---
 
@@ -319,59 +319,3 @@ Charts are expensive to render. On mobile, where they stack vertically and the s
 **Why it matters:** You don't need all features built before you can communicate their presence. The skeleton tells users "there's an AI feature here" before the feature is ready. It sets expectations, reduces surprise on launch, and keeps the UI layout stable across stories.
 
 **How to bring it up:** "The AiSummarySkeleton is a forward-looking placeholder. The AI summary feature isn't live yet, but the skeleton reserves its space in the layout and gives users a preview of what's coming. When the real panel ships, it drops into place without any layout change."
-
----
-
-## Story 3.6 Addendum: Transparency Panel & Mobile-First Layout
-
-### What Changed
-
-DashboardShell gained three responsibilities in Story 3.6:
-
-1. **Conditional mobile/desktop rendering** via `useIsMobile` hook. Mobile wraps the TransparencyPanel in a shadcn/ui `Sheet` (Radix Dialog primitive, `side="bottom"`). Desktop uses a CSS Grid with animated column expansion (`grid-cols-[1fr_0fr]` to `grid-cols-[1fr_320px]`). The conditional uses React JSX branching, not CSS `display:none`, to prevent mounting duplicate components (which would create duplicate SSE connections). The Sheet replaced the native `<dialog>`-based BottomSheet — Radix handles focus trapping, scroll lock, and portal rendering automatically.
-
-2. **Transparency state management.** Three pieces of state: `transparencyOpen` (boolean toggle), `metadata` (TransparencyMetadata from either SSE stream or RSC cache), and `firedRef` (debounce guard for analytics). The metadata converges from two paths — `onMetadataReady` callback from AiSummaryCard (authenticated users via stream) and `cachedMetadata` prop from page.tsx (anonymous users via RSC fetch).
-
-3. **Analytics tracking.** `handleToggleTransparency` fires `transparency_panel.opened` via `trackClientEvent` on open only (not close). A `useRef` + `setTimeout(300ms)` guard prevents double-firing on rapid toggles.
-
-### Interview-Relevant Patterns
-
-**Two metadata convergence paths.** Authenticated users get metadata through the SSE stream's `done` event (via `useAiStream` in AiSummaryCard, lifted up via `onMetadataReady` callback). Anonymous users get it through the RSC cache fetch in `page.tsx` (via `cachedMetadata` prop). DashboardShell doesn't care which path delivered the data — it just passes whatever `metadata` value it has to TransparencyPanel.
-
-**shadcn/ui Sheet for mobile bottom drawer.** The mobile transparency panel uses `<Sheet open={...} onOpenChange={...}>` with `<SheetContent side="bottom">`. Radix Dialog (which Sheet wraps) handles focus trapping, scroll lock, backdrop click/Escape dismissal, and portal rendering — all things the previous native `<dialog>` implementation handled manually or incompletely. A `sr-only` `<SheetTitle>` satisfies the Radix accessibility requirement for dialog labeling.
-
-**CSS Grid 0fr trick.** The `grid-cols-[1fr_0fr]` to `grid-cols-[1fr_320px]` transition animates the panel sliding in without reflowing the AI card's width. The `1fr` column stays stable. `transition-[grid-template-columns]` with `duration-200` and `motion-reduce:duration-0` handles the animation.
-
-**Debounce guard pattern.** The analytics debounce uses `useRef` (not `useState`) because changing a ref doesn't trigger re-renders. The 300ms timeout resets the guard, allowing re-firing on future opens but preventing double-fires from rapid toggles within a single interaction.
-
----
-
-## Story 4.1 Addendum: Share Insight as Rendered Image
-
-### What Changed
-
-DashboardShell became the orchestration point for the share feature — it owns the capture ref, instantiates the share hook, threads callbacks down, and gates the mobile FAB on AI completion.
-
-**Capture ref and useShareInsight hook (lines 185-186).** `captureRef` is a `useRef<HTMLDivElement>` attached to the `div` that wraps the AI summary card and chart grid (line 238). `useShareInsight(captureRef)` returns `{ status, generatePng, downloadPng, copyToClipboard }`. The ref defines the DOM subtree that gets captured as a PNG — everything inside it becomes the image.
-
-**AI completion gating for ShareFab (lines 182-183, 309-315).** `aiDone` is a boolean state that flips to `true` when AiSummaryCard fires `onStreamComplete`. The ShareFab's `visible` prop changed from `hasData` to `hasData && aiDone` — the FAB only appears after the AI summary finishes. Without this gate, the FAB would appear while the summary is still streaming, and the captured PNG would show incomplete text. This was the highest-severity finding in the code review.
-
-**Callback threading (lines 193-207, 309-315).** AiSummaryCard receives `onShare={generatePng}`, `onShareDownload={downloadPng}`, `onShareCopy={copyToClipboard}`, and `shareState={shareStatus}`. ShareFab receives the same set. The shell is the single source of truth — both the desktop ShareMenu (inside AiSummaryCard's footer) and the mobile ShareFab call the same hook functions.
-
-### Interview-Relevant Patterns
-
-**Ref-based DOM capture boundary.** The `captureRef` div wraps both the AI card and charts. This means the exported PNG includes the full dashboard context — not just the AI text, but the charts alongside it. The ref placement is a product decision disguised as a technical one: "what does 'sharing an insight' mean?" means "what DOM subtree do we screenshot?"
-
-**How to say it in an interview:** "The capture ref wraps the AI summary and charts together. Where you place the ref determines what ends up in the exported image. I wrapped both because the insight only makes sense alongside the data it references — sharing just the text without the charts would lose context."
-
-**Completion gating.** `aiDone` is a boolean derived from a callback, not from polling the hook's status. AiSummaryCard knows when streaming finishes (it has the `useAiStream` hook), and DashboardShell needs to know (to gate ShareFab). The callback pattern avoids DashboardShell importing or depending on the stream hook's internals.
-
-**How to say it in an interview:** "The mobile share button only appears after the AI summary completes. I gate it with a callback from the card rather than reading the stream hook's status directly. This keeps the stream lifecycle encapsulated in AiSummaryCard — DashboardShell just knows 'it's done' without knowing how streaming works."
-
-**Single hook, dual consumers.** Both ShareMenu (desktop, inside AiSummaryCard footer) and ShareFab (mobile, rendered directly by DashboardShell) call the same `generatePng`, `downloadPng`, and `copyToClipboard` from one `useShareInsight` instance. The PNG caching guard in the hook (added during code review) means whichever consumer triggers generation first wins — the second consumer gets the cached result instantly.
-
-### Updated Data Structures
-
-**DashboardShellProps** gained no new props — the share feature is entirely self-contained within the shell. `captureRef`, `shareStatus`, and the hook functions are internal state, not passed from the server component.
-
-**New state: `aiDone` (boolean).** Starts `false`, flips to `true` via `handleStreamComplete`. Never flips back — once the AI is done for this data, it stays done. A new `datasetId` from a filter change would remount the AiSummaryCard (via the key change in SWR), but the shell doesn't reset `aiDone` — the card fires `onStreamComplete` again when the new stream finishes.
