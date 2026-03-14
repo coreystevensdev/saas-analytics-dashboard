@@ -7,3 +7,5 @@ export * as analyticsEventsQueries from './analyticsEvents.js';
 export * as datasetsQueries from './datasets.js';
 export * as dataRowsQueries from './dataRows.js';
 export * as chartsQueries from './charts.js';
+export * as aiSummariesQueries from './aiSummaries.js';
+export * as subscriptionsQueries from './subscriptions.js';

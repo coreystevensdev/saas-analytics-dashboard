@@ -3,16 +3,6 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { AiSummaryCard, truncateAtWordBoundary } from './AiSummaryCard';
 import { AiSummaryErrorBoundary } from './AiSummaryErrorBoundary';
 
-const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
-
-// ShareMenu imports useIsMobile which calls matchMedia at module scope
-vi.mock('@/lib/hooks/useIsMobile', () => ({
-  useIsMobile: () => false,
-}));
-
 const mockUseAiStream = vi.fn();
 
 vi.mock('@/lib/hooks/useAiStream', () => ({
@@ -178,7 +168,7 @@ describe('AiSummaryCard', () => {
     expect(screen.getByText('Please try again later.')).toBeTruthy();
   });
 
-  it('calls retry when Try again is clicked', () => {
+  it('shows spinner and disables button when retry is pending', () => {
     const mockRetry = vi.fn();
     mockUseAiStream.mockReturnValue(
       defaultHookReturn({
@@ -190,7 +180,7 @@ describe('AiSummaryCard', () => {
       }),
     );
 
-    render(<AiSummaryCard datasetId={42} />);
+    const { container } = render(<AiSummaryCard datasetId={42} />);
     const button = screen.getByRole('button', { name: 'Try again' });
     expect((button as HTMLButtonElement).disabled).toBe(false);
 
@@ -198,7 +188,10 @@ describe('AiSummaryCard', () => {
       fireEvent.click(button);
     });
 
-    expect(mockRetry).toHaveBeenCalledOnce();
+    expect(mockRetry).toHaveBeenCalled();
+    expect(screen.getByText('Retrying...')).toBeTruthy();
+    expect(container.querySelector('svg.animate-spin')).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Retrying/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows reassurance message in error state', () => {

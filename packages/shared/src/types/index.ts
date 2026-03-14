@@ -27,3 +27,15 @@ export type {
   ChartData,
   ChartFilters,
 } from './charts.js';
+
+export type {
+  SseTextEvent,
+  SseDoneEvent,
+  SseErrorEvent,
+  SsePartialEvent,
+  SseUpgradeRequiredEvent,
+} from './sse.js';
+
+export type { SubscriptionTier } from './subscription.js';
+
+export type { TransparencyMetadata } from './transparency.js';

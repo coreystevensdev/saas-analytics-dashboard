@@ -5,7 +5,6 @@ import type { SubscriptionTier } from '../../db/queries/subscriptions.js';
 
 import { AI_TIMEOUT_MS, FREE_PREVIEW_WORD_LIMIT } from 'shared/constants';
 import { logger } from '../../lib/logger.js';
-import type { db, DbTransaction } from '../../lib/db.js';
 import { aiSummariesQueries } from '../../db/queries/index.js';
 import { runCurationPipeline, assemblePrompt, transparencyMetadataSchema } from '../curation/index.js';
 import { streamInterpretation } from './claudeClient.js';
@@ -41,19 +40,13 @@ function mapStreamError(err: unknown): SseErrorEvent {
   return { code: 'STREAM_ERROR', message: 'Something went wrong generating insights', retryable: true };
 }
 
-export interface StreamOutcome {
-  ok: boolean;
-  usage?: { inputTokens: number; outputTokens: number };
-}
-
 export async function streamToSSE(
   req: Request,
   res: Response,
   orgId: number,
   datasetId: number,
   tier: SubscriptionTier = 'free',
-  client?: typeof db | DbTransaction,
-): Promise<StreamOutcome> {
+): Promise<boolean> {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -90,14 +83,14 @@ export async function streamToSSE(
   let promptVersion: string;
 
   try {
-    const insights = await runCurationPipeline(orgId, datasetId, client);
+    const insights = await runCurationPipeline(orgId, datasetId);
     const { prompt: p, metadata } = assemblePrompt(insights);
     prompt = p;
     validatedMetadata = transparencyMetadataSchema.parse(metadata);
     promptVersion = metadata.promptVersion;
   } catch (err) {
     clearTimeout(timeout);
-    if (clientDisconnected) return { ok: false };
+    if (clientDisconnected) return false;
     logger.error(
       { orgId, datasetId, err: (err as Error).message },
       'curation pipeline failed',
@@ -108,7 +101,7 @@ export async function streamToSSE(
       retryable: true,
     } satisfies SseErrorEvent);
     safeEnd();
-    return { ok: false };
+    return false;
   }
 
   // -- stream phase --
@@ -141,11 +134,11 @@ export async function streamToSSE(
     );
 
     clearTimeout(timeout);
-    if (clientDisconnected) return { ok: false };
+    if (clientDisconnected) return false;
 
     // free-tier truncation already streamed + ended — skip caching so
     // a pro user requesting the same dataset gets a fresh full generation
-    if (truncatedForFree) return { ok: true };
+    if (truncatedForFree) return true;
 
     if (!result.fullText) {
       logger.warn({ orgId, datasetId }, 'Claude returned empty response');
@@ -155,7 +148,7 @@ export async function streamToSSE(
         retryable: true,
       } satisfies SseErrorEvent);
       safeEnd();
-      return { ok: false };
+      return false;
     }
 
     writeSseEvent(res, 'done', { usage: result.usage, metadata: validatedMetadata } satisfies SseDoneEvent);
@@ -168,8 +161,6 @@ export async function streamToSSE(
         result.fullText,
         validatedMetadata,
         promptVersion,
-        false,
-        client,
       );
       logger.info({ orgId, datasetId }, 'AI summary streamed and cached');
     } catch (cacheErr) {
@@ -179,20 +170,20 @@ export async function streamToSSE(
       );
     }
 
-    return { ok: true, usage: result.usage };
+    return true;
   } catch (err) {
     clearTimeout(timeout);
 
     if (clientDisconnected) {
       logger.info({ orgId, datasetId }, 'client disconnected during AI stream');
-      return { ok: false };
+      return false;
     }
 
     // free-tier abort triggers a catch — that's expected, not an error
-    if (truncatedForFree) return { ok: true };
+    if (truncatedForFree) return true;
 
     if (timedOut) {
-      if (ended) return { ok: false };
+      if (ended) return false;
 
       if (accumulatedText) {
         logger.warn(
@@ -211,10 +202,10 @@ export async function streamToSSE(
       }
 
       safeEnd();
-      return { ok: false };
+      return false;
     }
 
-    if (ended) return { ok: false };
+    if (ended) return false;
 
     const mapped = mapStreamError(err);
     logger.error(
@@ -223,6 +214,6 @@ export async function streamToSSE(
     );
     writeSseEvent(res, 'error', mapped);
     safeEnd();
-    return { ok: false };
+    return false;
   }
 }

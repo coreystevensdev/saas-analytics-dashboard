@@ -1,6 +1,5 @@
 import { logger } from '../../lib/logger.js';
 import { dataRowsQueries, aiSummariesQueries } from '../../db/queries/index.js';
-import type { db, DbTransaction } from '../../lib/db.js';
 import { computeStats } from './computation.js';
 import { scoreInsights, scoringConfig } from './scoring.js';
 import { assemblePrompt } from './assembly.js';
@@ -11,9 +10,8 @@ import type { ScoredInsight } from './types.js';
 export async function runCurationPipeline(
   orgId: number,
   datasetId: number,
-  client?: typeof db | DbTransaction,
 ): Promise<ScoredInsight[]> {
-  const rows = await dataRowsQueries.getRowsByDataset(orgId, datasetId, client);
+  const rows = await dataRowsQueries.getRowsByDataset(orgId, datasetId);
 
   if (rows.length === 0) {
     logger.warn({ orgId, datasetId }, 'curation pipeline got 0 rows — dataset may not exist');
