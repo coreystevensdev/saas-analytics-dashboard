@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import LoginButton from './LoginButton';
 
 export const metadata: Metadata = {
-  title: 'Sign In — SaaS Analytics Dashboard',
+  title: 'Sign In — Tellsight',
 };
 
 export default async function LoginPage({
@@ -17,7 +17,7 @@ export default async function LoginPage({
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-sm space-y-8 rounded-lg bg-card p-8 shadow-sm">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-foreground">SaaS Analytics</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Tellsight</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             AI-powered insights for your business data
           </p>

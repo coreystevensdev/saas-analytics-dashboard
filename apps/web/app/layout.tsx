@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'SaaS Analytics Dashboard',
+  title: 'Tellsight',
   description: 'AI-powered analytics that explains your business data in plain English.',
 };
 

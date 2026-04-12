@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { BarChart3, LogIn, Menu, User } from 'lucide-react';
+import { LogIn, Menu, User } from 'lucide-react';
 import { useSidebar } from '@/app/dashboard/contexts/SidebarContext';
+import { TellsightLogo } from '@/components/common/TellsightLogo';
 
 interface AppHeaderProps {
   isAuthenticated: boolean;
@@ -22,8 +23,8 @@ export function AppHeader({ isAuthenticated }: AppHeaderProps) {
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-2 lg:hidden">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          <span className="text-lg font-semibold">Insight</span>
+          <TellsightLogo size={20} />
+          <span className="text-lg font-semibold">Tellsight</span>
         </div>
       </div>
 

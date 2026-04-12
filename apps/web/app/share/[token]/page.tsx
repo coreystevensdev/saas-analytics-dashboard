@@ -50,7 +50,7 @@ export async function generateMetadata({
   const result = await fetchShare(token);
 
   if (!result.ok) {
-    return { title: 'Shared Insight — SaaS Analytics Dashboard' };
+    return { title: 'Shared Insight — Tellsight' };
   }
 
   const { orgName, aiSummaryContent } = result.data;
@@ -63,7 +63,7 @@ export async function generateMetadata({
       title: ogTitle,
       description,
       type: 'article',
-      siteName: 'SaaS Analytics Dashboard',
+      siteName: 'Tellsight',
     },
   };
 }
@@ -81,7 +81,7 @@ export default async function SharePage({
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <div className="px-4 py-4 text-sm font-medium text-muted-foreground">
-          SaaS Analytics Dashboard
+          Tellsight
         </div>
         <div className="flex flex-1 items-center justify-center">
           <ShareError variant={variant} />
@@ -95,7 +95,7 @@ export default async function SharePage({
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="px-4 py-4 text-sm font-medium text-muted-foreground">
-        SaaS Analytics Dashboard
+        Tellsight
       </div>
       <div className="flex flex-1 items-center justify-center px-4">
         <SharedInsightCard

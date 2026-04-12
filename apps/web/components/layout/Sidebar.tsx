@@ -3,13 +3,14 @@
 import { useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Upload, Settings, ShieldCheck, Activity, X } from 'lucide-react';
+import { LayoutDashboard, Upload, Settings, ShieldCheck, Activity, X } from 'lucide-react';
+import { TellsightLogo } from '@/components/common/TellsightLogo';
 import { cn } from '@/lib/utils';
 import { useSidebar } from '@/app/dashboard/contexts/SidebarContext';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/upload', label: 'Upload', icon: Upload },
   { href: '/settings/invites', label: 'Settings', icon: Settings },
 ] as const;
@@ -25,8 +26,8 @@ function SidebarNav({ orgName, isAdmin, onNavigate }: { orgName?: string; isAdmi
           className="flex items-center gap-2 text-lg font-semibold text-foreground"
           onClick={onNavigate}
         >
-          <BarChart3 className="h-5 w-5 text-primary" />
-          Insight
+          <TellsightLogo size={20} />
+          Tellsight
         </Link>
         {onNavigate && (
           <button
