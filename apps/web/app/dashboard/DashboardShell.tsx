@@ -17,6 +17,8 @@ import { useSidebar } from './contexts/SidebarContext';
 import { RevenueChart } from './charts/RevenueChart';
 import { ExpenseChart } from './charts/ExpenseChart';
 import { ExpenseTrendChart } from './charts/ExpenseTrendChart';
+import { RevenueVsExpensesChart } from './charts/RevenueVsExpensesChart';
+import { ProfitMarginChart } from './charts/ProfitMarginChart';
 import { ChartSkeleton } from './charts/ChartSkeleton';
 import { LazyChart } from './charts/LazyChart';
 import { FilterBar, computeDateRange, type FilterState } from './FilterBar';
@@ -291,6 +293,16 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tie
                     </LazyChart>
                   )}
                 </div>
+                {data.monthlyComparison?.length > 0 && (
+                  <div className="mt-4 grid gap-4 md:mt-6 md:grid-cols-2 md:gap-6">
+                    <LazyChart skeletonVariant="line">
+                      <RevenueVsExpensesChart data={data.monthlyComparison} />
+                    </LazyChart>
+                    <LazyChart skeletonVariant="line">
+                      <ProfitMarginChart data={data.monthlyComparison} />
+                    </LazyChart>
+                  </div>
+                )}
                 {data.expenseTrend?.length > 0 && (
                   <div className="mt-4 md:mt-6">
                     <LazyChart skeletonVariant="line">

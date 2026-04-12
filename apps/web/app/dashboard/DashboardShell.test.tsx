@@ -151,6 +151,10 @@ const fullData: ChartData = {
     { month: 'Jan', Payroll: 3000, Rent: 1500 },
     { month: 'Feb', Payroll: 3200, Rent: 1500 },
   ],
+  monthlyComparison: [
+    { month: 'Jan', revenue: 5000, expenses: 4500, profit: 500 },
+    { month: 'Feb', revenue: 7000, expenses: 4700, profit: 2300 },
+  ],
   orgName: 'Acme Corp',
   isDemo: false,
   availableCategories: ['Payroll', 'Rent'],
@@ -163,6 +167,7 @@ const emptyData: ChartData = {
   revenueTrend: [],
   expenseBreakdown: [],
   expenseTrend: [],
+  monthlyComparison: [],
   orgName: 'Dashboard',
   isDemo: true,
   availableCategories: [],

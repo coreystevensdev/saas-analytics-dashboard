@@ -8,6 +8,7 @@ const EMPTY_CHART_DATA: ChartData = {
   revenueTrend: [],
   expenseBreakdown: [],
   expenseTrend: [],
+  monthlyComparison: [],
   orgName: 'Dashboard',
   isDemo: true,
   availableCategories: [],
