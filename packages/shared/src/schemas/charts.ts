@@ -18,10 +18,18 @@ export const datasetDateRangeSchema = z.object({
 
 export const expenseTrendPointSchema = z.record(z.string(), z.union([z.string(), z.number()]));
 
+export const monthlyComparisonPointSchema = z.object({
+  month: z.string(),
+  revenue: z.number(),
+  expenses: z.number(),
+  profit: z.number(),
+});
+
 export const chartDataSchema = z.object({
   revenueTrend: z.array(revenueTrendPointSchema),
   expenseBreakdown: z.array(expenseBreakdownItemSchema),
   expenseTrend: z.array(expenseTrendPointSchema),
+  monthlyComparison: z.array(monthlyComparisonPointSchema),
   orgName: z.string(),
   isDemo: z.boolean(),
   availableCategories: z.array(z.string()),
