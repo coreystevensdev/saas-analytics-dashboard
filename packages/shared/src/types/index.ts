@@ -23,6 +23,7 @@ export type {
 export type {
   RevenueTrendPoint,
   ExpenseBreakdownItem,
+  MonthlyComparisonPoint,
   DatasetDateRange,
   ChartData,
   ChartFilters,

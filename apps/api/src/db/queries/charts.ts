@@ -120,5 +120,25 @@ export async function getChartData(
       return point;
     });
 
-  return { revenueTrend, expenseBreakdown, expenseTrend, availableCategories, dateRange };
+  // monthly totals for revenue vs expenses + profit margin charts
+  const allMonthKeys = new Set([...revenueByMonth.keys(), ...expenseByMonthCategory.keys()]);
+  const monthlyComparison = [...allMonthKeys]
+    .sort()
+    .map((key) => {
+      const monthIdx = parseInt(key.split('-')[1]!, 10) - 1;
+      const year = key.split('-')[0];
+      const revenue = Math.round((revenueByMonth.get(key) ?? 0) * 100) / 100;
+      const totalExpense = expenseByMonthCategory.has(key)
+        ? [...expenseByMonthCategory.get(key)!.values()].reduce((s, v) => s + v, 0)
+        : 0;
+      const expenses = Math.round(totalExpense * 100) / 100;
+      return {
+        month: `${MONTH_LABELS[monthIdx]} ${year}`,
+        revenue,
+        expenses,
+        profit: Math.round((revenue - expenses) * 100) / 100,
+      };
+    });
+
+  return { revenueTrend, expenseBreakdown, expenseTrend, monthlyComparison, availableCategories, dateRange };
 }
