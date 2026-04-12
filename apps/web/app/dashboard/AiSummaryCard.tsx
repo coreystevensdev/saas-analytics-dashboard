@@ -263,7 +263,7 @@ export function AiSummaryCard({
         role="region"
         aria-label="AI business summary"
       >
-        <h3 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">Analysis</h3>
+        <h3 className="mb-4 text-base font-semibold text-card-foreground">Analysis</h3>
         {wasTruncated ? (
           <FreePreviewOverlay previewText={preview} onUpgrade={handleUpgrade} />
         ) : (
