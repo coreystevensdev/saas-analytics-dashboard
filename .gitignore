@@ -48,7 +48,16 @@ Thumbs.db
 # Interview documentation companions
 *_explained.md
 
-# BMAD framework (planning artifacts in _bmad-output/ are tracked)
+# Local dev overrides
+docker-compose.override.yml
+
+# Internal docs (kept locally, not in repo)
+docs/demo-walkthrough-plan.md
+docs/deployment-roadmap.md
+scripts/check-story-status.sh
+
+# BMAD framework
 _bmad/
+_bmad-output/
 CLAUDE.md
 .claude/

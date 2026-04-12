@@ -1,30 +1,61 @@
-# SaaS Analytics Dashboard
+<p align="center">
+  <img src="docs/screenshots/banner.png" alt="Tellsight" width="100%">
+</p>
 
-AI-powered analytics that explains business data in plain English for small business owners.
-
-![Dashboard — light mode](docs/screenshots/hero-light.png)
-
-[![CI](https://github.com/CoreyStevensDev/saas-analytics-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/CoreyStevensDev/saas-analytics-dashboard/actions/workflows/ci.yml)
-
-> 781 tests | 5-stage CI | 7 epics, 35 stories | MIT License
+<p align="center">
+  <a href="https://github.com/CoreyStevensDev/saas-analytics-dashboard/actions/workflows/ci.yml"><img src="https://github.com/CoreyStevensDev/saas-analytics-dashboard/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
+  <img src="https://img.shields.io/badge/Next.js-16-black.svg" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/TypeScript-5.9-3178c6.svg" alt="TypeScript">
+</p>
 
 ## Overview
 
-Most analytics tools show you what happened. This one tells you what it means. Upload a CSV, get instant charts, and let AI interpret the trends, anomalies, and opportunities your data reveals — no data science degree required.
+Most analytics tools show you what happened. This one tells you what it means. Upload a CSV, get instant charts, and let AI interpret the trends, anomalies, and opportunities your data reveals. No data science degree required.
 
-Built as a full-stack portfolio piece demonstrating production patterns: multi-tenant architecture, SSE streaming, Stripe billing, row-level security, and a privacy-first AI pipeline.
+A full-stack portfolio piece with production patterns: multi-tenant architecture, SSE streaming, Stripe billing, row-level security, and a privacy-first AI pipeline.
 
 ## Problem
 
-Small businesses can't afford data scientists, and enterprise analytics platforms overwhelm non-technical users with dashboards full of numbers but no guidance. The gap isn't visualization — plenty of tools make charts. The gap is interpretation: what do these numbers actually mean for my business?
+Small businesses can't afford data scientists, and enterprise analytics platforms overwhelm non-technical users with dashboards full of numbers but no guidance. The gap isn't visualization. Plenty of tools make charts. The gap is interpretation: what do these numbers actually mean for my business?
 
 ## Solution
 
-Upload a CSV of your business data. The dashboard instantly visualizes revenue trends, expense breakdowns, and category comparisons. Then AI reads the computed statistics — not your raw data — and explains what's happening in plain English: which costs are rising faster than revenue, where seasonal patterns suggest opportunities, what anomalies deserve attention.
+Upload a CSV of your business data. The dashboard instantly visualizes revenue trends, expense breakdowns, and category comparisons. Then AI reads the computed statistics (not your raw data) and explains what's happening in plain English: which costs are rising faster than revenue, where seasonal patterns suggest opportunities, what anomalies deserve attention.
 
-The core thesis: **interpretation, not just visualization.**
+The core thesis: **interpretation over visualization.**
 
-The user journey: CSV upload → instant charts → AI summary in plain English → share insights with your team.
+## Features
+
+<p align="center">
+  <img src="docs/screenshots/feature-charts.png" alt="Interactive dashboard with revenue and expense charts" width="100%">
+</p>
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="docs/screenshots/feature-ai.png" alt="AI-powered business insights in dark mode">
+
+**AI-Powered Insights.** Claude reads the computed statistics and explains what matters. Summaries stream in real time via SSE.
+
+</td>
+<td width="50%">
+
+<img src="docs/screenshots/feature-charts-dark.png" alt="Dashboard charts in dark mode">
+
+**Dark Mode.** System preference detection + manual toggle. Every component, every chart, every panel.
+
+</td>
+</tr>
+</table>
+
+**Also included:**
+- **Stripe billing.** Free tier with AI preview (~150 words), Pro tier for full summaries.
+- **Row-level security.** Org-first multi-tenancy with PostgreSQL RLS policies on every table.
+- **Shareable insights.** Generate PNG snapshots or shareable links for team collaboration.
+- **Dark mode.** System preference detection + manual toggle with oklch color tokens.
+- **Demo mode.** Pre-loaded seed data with cached AI summary, zero configuration needed.
 
 ## Architecture
 
@@ -48,9 +79,7 @@ flowchart LR
     Claude -- "SSE stream" --> Browser
 ```
 
-The browser never talks to Express directly — everything routes through a Next.js BFF proxy (same-origin, no CORS). The curation pipeline is the most interesting architectural decision: it computes statistics locally, scores them by relevance, then assembles a prompt from the top insights. Raw data never reaches the LLM — only computed statistics. This privacy-by-architecture approach means the AI interprets trends and anomalies without ever seeing individual rows.
-
-AI responses stream back via Server-Sent Events, so users see the summary build in real time rather than staring at a spinner.
+The browser never talks to Express directly. Everything routes through a Next.js BFF proxy (same-origin, no CORS). The curation pipeline computes statistics locally, scores them by relevance, then assembles a prompt from the top insights. Raw data never reaches the LLM. Only computed statistics. This privacy-by-architecture approach means the AI interprets trends and anomalies without ever seeing individual rows.
 
 ## Tech Stack
 
@@ -64,26 +93,7 @@ AI responses stream back via Server-Sent Events, so users see the summary build 
 | Auth | JWT + refresh rotation, Google OAuth (jose 6.x) | Secure token lifecycle, social login for onboarding |
 | Monorepo | pnpm workspaces, Turborepo | Shared schemas between frontend/backend |
 | Testing | Vitest, Playwright | Fast unit tests, browser-based E2E and screenshots |
-| CI/CD | GitHub Actions (5-stage pipeline) | Lint → test → seed validation → E2E → Docker smoke |
-
-## Key Features
-
-- **AI-powered summaries** — Claude interprets business data trends, anomalies, and opportunities in plain English via SSE streaming
-- **Dark mode** — System preference detection + manual toggle with oklch color tokens
-- **Shareable insights** — Generate PNG snapshots or shareable links for team collaboration
-- **Stripe billing** — Free tier with AI preview (~150 words), Pro tier for full summaries. Webhook-driven lifecycle management
-- **Row-level security** — Org-first multi-tenancy with PostgreSQL RLS policies on every table
-- **5-stage CI pipeline** — Lint, build, seed validation, unit tests, and E2E tests in GitHub Actions
-- **Privacy-by-architecture** — Raw data never reaches the LLM; only computed statistics are sent
-- **Demo mode** — Pre-loaded seed data with cached AI summary, zero configuration needed
-
-## Screenshots
-
-![Dashboard — light mode](docs/screenshots/hero-light.png)
-
-![Dashboard — dark mode](docs/screenshots/hero-dark.png)
-
-> Regenerate locally: `pnpm screenshots` (requires the app running via `docker compose up`).
+| CI/CD | GitHub Actions (5-stage pipeline) | Lint, test, seed validation, E2E, Docker smoke |
 
 ## Getting Started
 
@@ -100,14 +110,14 @@ cd saas-analytics-dashboard
 
 # 2. Create your env file
 cp .env.example .env
-# Edit .env — most defaults work for local dev
+# Edit .env, most defaults work for local dev
 # CLAUDE_API_KEY is optional: seed data includes a pre-generated AI summary
 
 # 3. Start the full stack
 docker compose up
 ```
 
-The app starts at [http://localhost:3000](http://localhost:3000) with seed data pre-loaded. The dashboard shows charts and an AI summary immediately — no account needed.
+The app starts at [http://localhost:3000](http://localhost:3000) with seed data pre-loaded. The dashboard shows charts and an AI summary immediately, no account needed.
 
 ### Local Development
 
@@ -117,34 +127,25 @@ pnpm dev          # Start all services via Turborepo
 pnpm lint         # Lint all packages
 pnpm type-check   # TypeScript check
 pnpm test         # Run all tests
-pnpm screenshots  # Generate hero screenshots via Playwright
+pnpm screenshots  # Regenerate README assets via Playwright
 ```
 
 ## Demo
 
-The app ships with a seed data demo mode: 12 months of synthetic business data across 6 categories (Revenue, Payroll, Marketing, Rent, Supplies, Utilities) with a pre-generated AI summary. No API keys, no accounts — just `docker compose up` and open the dashboard.
+The app ships with seed data: 12 months of synthetic business data across 6 categories (Revenue, Payroll, Marketing, Rent, Supplies, Utilities) with a pre-generated AI summary. No API keys, no accounts. Just `docker compose up` and open the dashboard.
 
-The AI summary highlights the December revenue spike, Q3 marketing dip, October payroll anomaly, and steady rent baseline — demonstrating what the curation pipeline surfaces from real-ish data.
+The AI summary highlights the December revenue spike, Q3 marketing dip, October payroll anomaly, and steady rent baseline. That's the kind of thing the curation pipeline surfaces from real-ish data.
 
 ## Project Structure
 
 ```
-apps/web/          — Next.js 16 frontend (port 3000)
-apps/api/          — Express 5 API (port 3001)
-packages/shared/   — Shared schemas, types, constants
-scripts/           — CI tools (seed validation, screenshot generation)
-e2e/               — Playwright E2E tests
-_bmad-output/      — Planning artifacts (PRD, architecture, UX design, epics)
+apps/web/          Next.js 16 frontend (port 3000)
+apps/api/          Express 5 API (port 3001)
+packages/shared/   Shared schemas, types, constants
+scripts/           CI tools (seed validation, screenshot generation)
+e2e/               Playwright E2E tests
 ```
-
-## Planning Artifacts
-
-The `_bmad-output/` directory contains the full planning trail behind this project — product requirements, architecture decisions, UX specifications, epic breakdowns, and retrospectives. If you're curious how the codebase got here, start with:
-
-- [`prd.md`](_bmad-output/planning-artifacts/prd.md) — 41 functional requirements, 27 non-functional
-- [`architecture.md`](_bmad-output/planning-artifacts/architecture.md) — stack decisions, file map, curation pipeline design
-- [`epics.md`](_bmad-output/planning-artifacts/epics.md) — 7 epics, 35 stories, dependency graph
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
