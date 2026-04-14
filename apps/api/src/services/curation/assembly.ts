@@ -6,6 +6,7 @@ import { AppError } from '../../lib/appError.js';
 import type { ScoredInsight, AssembledContext, TransparencyMetadata } from './types.js';
 import { StatType } from './types.js';
 import type { BusinessProfile } from 'shared/types';
+import { getIndustryBenchmarks } from './config/industry-benchmarks.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_VERSION = 'v1';
@@ -107,12 +108,14 @@ export function assemblePrompt(
   const template = getTemplate(promptVersion);
   const businessContext = formatBusinessContext(businessProfile);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const benchmarks = getIndustryBenchmarks(businessProfile?.businessType) ?? 'No industry benchmarks available.';
 
   if (insights.length === 0) {
     const emptyPrompt = template
       .replace('{{statSummaries}}', 'No statistical insights available. The dataset may be empty or too small for meaningful analysis.')
       .replace('{{today}}', today)
       .replace('{{businessContext}}', businessContext)
+      .replace('{{industryBenchmarks}}', benchmarks)
       .replace('{{statTypeList}}', 'none')
       .replace('{{categoryCount}}', '0')
       .replace('{{insightCount}}', '0');
@@ -139,6 +142,7 @@ export function assemblePrompt(
     .replace('{{statSummaries}}', statSummaries)
     .replace('{{today}}', today)
     .replace('{{businessContext}}', businessContext)
+    .replace('{{industryBenchmarks}}', benchmarks)
     .replace('{{statTypeList}}', statTypes.join(', '))
     .replace('{{categoryCount}}', String(categories.size))
     .replace('{{insightCount}}', String(insights.length));
