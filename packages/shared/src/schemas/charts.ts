@@ -25,11 +25,21 @@ export const monthlyComparisonPointSchema = z.object({
   profit: z.number(),
 });
 
+export const yoyComparisonPointSchema = z.object({
+  month: z.string(),
+  currentYear: z.number(),
+  priorYear: z.number(),
+  changePercent: z.number().nullable(),
+  currentYearLabel: z.string(),
+  priorYearLabel: z.string(),
+});
+
 export const chartDataSchema = z.object({
   revenueTrend: z.array(revenueTrendPointSchema),
   expenseBreakdown: z.array(expenseBreakdownItemSchema),
   expenseTrend: z.array(expenseTrendPointSchema),
   monthlyComparison: z.array(monthlyComparisonPointSchema),
+  yoyComparison: z.array(yoyComparisonPointSchema),
   orgName: z.string(),
   isDemo: z.boolean(),
   availableCategories: z.array(z.string()),

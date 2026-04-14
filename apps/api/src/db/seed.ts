@@ -20,12 +20,10 @@ if (!dbUrl) {
 const client = postgres(dbUrl, { max: 1 });
 const db = drizzle(client, { schema });
 
-// 12 months of data for Sunrise Cafe — a fictional coffee shop.
-// Three deliberate anomalies baked in so the AI curation pipeline (Story 3.1)
-// has something worth interpreting.
+// 24 months of data for Sunrise Cafe — a fictional coffee shop.
+// Two years (2024–2025) enables year-over-year comparison.
+// Anomalies baked in so the curation pipeline has something to interpret.
 function buildSeedRows(orgId: number, datasetId: number) {
-  const months = Array.from({ length: 12 }, (_, i) => i); // 0–11
-
   const rows: Array<{
     orgId: number;
     datasetId: number;
@@ -37,58 +35,63 @@ function buildSeedRows(orgId: number, datasetId: number) {
     label: string | null;
   }> = [];
 
-  for (const m of months) {
-    const date = new Date(Date.UTC(2025, m, 15)); // mid-month
+  for (let year = 2024; year <= 2025; year++) {
+    const growth = year === 2025 ? 1.12 : 1.0; // 12% YoY revenue growth
+    const months = Array.from({ length: 12 }, (_, i) => i);
 
-    // Revenue: $12k–$18k baseline, December spike to $28k
-    const revenue = m === 11 ? '28000.00' : lerp('12000.00', '18000.00', m);
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Revenue', parentCategory: 'Income',
-      date, amount: revenue, label: null,
-    });
+    for (const m of months) {
+      const date = new Date(Date.UTC(year, m, 15));
 
-    // Payroll: $5.5k–$6.5k baseline, October anomaly at $9.2k
-    const payroll = m === 9 ? '9200.00' : lerp('5500.00', '6500.00', m);
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Payroll', parentCategory: 'Expenses',
-      date, amount: payroll, label: null,
-    });
+      // Revenue: $12k–$18k baseline in 2024, +12% in 2025. December spike both years.
+      const baseRevenue = m === 11 ? 28000 : parseFloat(lerp('12000.00', '18000.00', m));
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Revenue', parentCategory: 'Income',
+        date, amount: (baseRevenue * growth).toFixed(2), label: null,
+      });
 
-    // Marketing: $800–$1200 baseline, Q3 (Jul/Aug/Sep) drops to ~$200–$218 (lerp over 3 months)
-    const isQ3 = m >= 6 && m <= 8;
-    const marketing = isQ3
-      ? lerp('200.00', '300.00', m - 6)
-      : lerp('800.00', '1200.00', m);
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Marketing', parentCategory: 'Expenses',
-      date, amount: marketing, label: null,
-    });
+      // Payroll: $5.5k–$6.5k, October anomaly only in 2025
+      const payroll = (year === 2025 && m === 9) ? '9200.00' : lerp('5500.00', '6500.00', m);
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Payroll', parentCategory: 'Expenses',
+        date, amount: payroll, label: null,
+      });
 
-    // Rent: flat $3000
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Rent', parentCategory: 'Expenses',
-      date, amount: '3000.00', label: null,
-    });
+      // Marketing: Q3 dip in 2025 only. 2024 stays steady.
+      const isQ3Dip = year === 2025 && m >= 6 && m <= 8;
+      const marketing = isQ3Dip
+        ? lerp('200.00', '300.00', m - 6)
+        : lerp('800.00', '1200.00', m);
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Marketing', parentCategory: 'Expenses',
+        date, amount: marketing, label: null,
+      });
 
-    // Supplies: $1.5k–$2.5k, roughly tracks revenue
-    const supplies = lerp('1500.00', '2500.00', m);
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Supplies', parentCategory: 'Expenses',
-      date, amount: supplies, label: null,
-    });
+      // Rent: flat $3000 both years
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Rent', parentCategory: 'Expenses',
+        date, amount: '3000.00', label: null,
+      });
 
-    // Utilities: $400–$600, winter months higher (reverse pattern)
-    const utilities = lerp('600.00', '400.00', m);
-    rows.push({
-      orgId, datasetId, sourceType: 'csv',
-      category: 'Utilities', parentCategory: 'Expenses',
-      date, amount: utilities, label: null,
-    });
+      // Supplies: $1.5k–$2.5k, tracks revenue
+      const supplies = lerp('1500.00', '2500.00', m);
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Supplies', parentCategory: 'Expenses',
+        date, amount: supplies, label: null,
+      });
+
+      // Utilities: $400–$600, winter months higher
+      const utilities = lerp('600.00', '400.00', m);
+      rows.push({
+        orgId, datasetId, sourceType: 'csv',
+        category: 'Utilities', parentCategory: 'Expenses',
+        date, amount: utilities, label: null,
+      });
+    }
   }
 
   return rows;
@@ -103,13 +106,13 @@ function lerp(minVal: string, maxVal: string, monthIndex: number): string {
   return (min + (max - min) * t).toFixed(2);
 }
 
-const FALLBACK_SEED_SUMMARY = `December revenue hit $14,200, up 42% from November. Holiday demand drove most of that. The rest of the year stayed between $12K and $18K with steady upward momentum.
+const FALLBACK_SEED_SUMMARY = `Revenue grew 12% year-over-year — from $187K in 2024 to $210K in 2025. December remained the standout month both years, hitting $31K in 2025 versus $28K the year before. The growth is real but concentrated in seasonal peaks.
 
-Payroll is the number to watch. It went from $3,800 in January to $5,200 by year end, and October spiked to $5,800 for reasons worth investigating. If that's a new normal rather than a one-time bonus, margins get tight fast.
+Payroll spiked to $9,200 in October 2025, about 45% above normal. That didn't happen in 2024, so it's not seasonal — worth investigating whether it's a one-time bonus or a staffing change that sticks. If it repeats, it eats most of the revenue gains.
 
-Marketing dropped to $800/month in Q3 but revenue didn't follow it down. Either the earlier spend had a long tail or the cafe's regulars aren't driven by ads. Consider keeping Q3 marketing low next year and seeing if the pattern holds.
+Marketing got slashed to $200–$300/month during Q3 2025, down from $800–$1,200 the rest of the year. Revenue didn't dip, which suggests the cafe's regulars aren't ad-driven. The same period in 2024 kept full marketing spend with no revenue difference — strong signal to keep Q3 lean.
 
-December was the only month with meaningful margin at around $6,800 net. Most months barely broke even. A cash reserve built during holiday season would cover the slower months without forcing cuts.`;
+Margins are tighter than they look. After expenses, most months net $2K–$4K. The December spike papers over thin months. A cash reserve from holiday season would smooth out the year without forcing cuts.`;
 
 async function seed() {
   // app_admin role has BYPASSRLS — no SET LOCAL needed
@@ -150,7 +153,7 @@ async function seed() {
       .insert(schema.datasets)
       .values({
         orgId,
-        name: 'Sunrise Cafe 2025 Financials',
+        name: 'Sunrise Cafe 2024–2025 Financials',
         sourceType: 'csv',
         isSeedData: true,
       })
