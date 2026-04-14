@@ -106,10 +106,12 @@ export function assemblePrompt(
 ): AssembledContext {
   const template = getTemplate(promptVersion);
   const businessContext = formatBusinessContext(businessProfile);
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   if (insights.length === 0) {
     const emptyPrompt = template
       .replace('{{statSummaries}}', 'No statistical insights available. The dataset may be empty or too small for meaningful analysis.')
+      .replace('{{today}}', today)
       .replace('{{businessContext}}', businessContext)
       .replace('{{statTypeList}}', 'none')
       .replace('{{categoryCount}}', '0')
@@ -135,6 +137,7 @@ export function assemblePrompt(
 
   const prompt = template
     .replace('{{statSummaries}}', statSummaries)
+    .replace('{{today}}', today)
     .replace('{{businessContext}}', businessContext)
     .replace('{{statTypeList}}', statTypes.join(', '))
     .replace('{{categoryCount}}', String(categories.size))
