@@ -19,6 +19,7 @@ import { ExpenseChart } from './charts/ExpenseChart';
 import { ExpenseTrendChart } from './charts/ExpenseTrendChart';
 import { RevenueVsExpensesChart } from './charts/RevenueVsExpensesChart';
 import { ProfitMarginChart } from './charts/ProfitMarginChart';
+import { YoyChart } from './charts/YoyChart';
 import { ChartSkeleton } from './charts/ChartSkeleton';
 import { LazyChart } from './charts/LazyChart';
 import { FilterBar, computeDateRange, type FilterState } from './FilterBar';
@@ -40,7 +41,7 @@ interface DashboardShellProps {
   tier?: SubscriptionTier;
 }
 
-const EMPTY_FILTERS: FilterState = { datePreset: null, category: null };
+const EMPTY_FILTERS: FilterState = { datePreset: null, category: null, granularity: 'monthly' };
 
 function buildSwrKey(filters: FilterState): string {
   const params = new URLSearchParams();
@@ -53,6 +54,9 @@ function buildSwrKey(filters: FilterState): string {
   }
   if (filters.category) {
     params.set('categories', filters.category);
+  }
+  if (filters.granularity && filters.granularity !== 'monthly') {
+    params.set('granularity', filters.granularity);
   }
   const qs = params.toString();
   return qs ? `/dashboard/charts?${qs}` : '/dashboard/charts';
@@ -168,7 +172,7 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tie
   const [metadata, setMetadata] = useState<TransparencyMetadata | null>(cachedMetadata ?? null);
   const firedRef = useRef(false);
   const swrKey = buildSwrKey(filters);
-  const hasActiveFilters = filters.datePreset !== null || filters.category !== null;
+  const hasActiveFilters = filters.datePreset !== null || filters.category !== null || filters.granularity !== 'monthly';
 
   const { data = initialData, isLoading, mutate } = useSWR(
     swrKey,
@@ -341,6 +345,13 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tie
                         data={data.expenseTrend}
                         categories={data.availableCategories}
                       />
+                    </LazyChart>
+                  </div>
+                )}
+                {data.yoyComparison?.length > 0 && (
+                  <div className="mt-4 md:mt-6">
+                    <LazyChart skeletonVariant="bar">
+                      <YoyChart data={data.yoyComparison} />
                     </LazyChart>
                   </div>
                 )}
