@@ -6,6 +6,9 @@ export const StatType = {
   Trend: 'trend',
   Anomaly: 'anomaly',
   CategoryBreakdown: 'category_breakdown',
+  YearOverYear: 'year_over_year',
+  MarginTrend: 'margin_trend',
+  SeasonalProjection: 'seasonal_projection',
 } as const;
 
 export type StatType = (typeof StatType)[keyof typeof StatType];
@@ -46,6 +49,31 @@ export interface CategoryBreakdownDetails {
   max: number;
 }
 
+export interface YearOverYearDetails {
+  currentYear: number;
+  priorYear: number;
+  currentYearLabel: string;
+  priorYearLabel: string;
+  changePercent: number;
+  month: string;
+}
+
+export interface MarginTrendDetails {
+  recentMarginPercent: number;
+  priorMarginPercent: number;
+  direction: 'expanding' | 'shrinking' | 'stable';
+  revenueGrowthPercent: number;
+  expenseGrowthPercent: number;
+}
+
+export interface SeasonalProjectionDetails {
+  projectedMonth: string;
+  projectedAmount: number;
+  basisMonths: string[];
+  basisValues: number[];
+  confidence: 'high' | 'moderate' | 'low';
+}
+
 interface BaseComputedStat {
   category: string | null;
   value: number;
@@ -77,12 +105,30 @@ export interface CategoryBreakdownStat extends BaseComputedStat {
   details: CategoryBreakdownDetails;
 }
 
+export interface YearOverYearStat extends BaseComputedStat {
+  statType: 'year_over_year';
+  details: YearOverYearDetails;
+}
+
+export interface MarginTrendStat extends BaseComputedStat {
+  statType: 'margin_trend';
+  details: MarginTrendDetails;
+}
+
+export interface SeasonalProjectionStat extends BaseComputedStat {
+  statType: 'seasonal_projection';
+  details: SeasonalProjectionDetails;
+}
+
 export type ComputedStat =
   | TotalStat
   | AverageStat
   | TrendStat
   | AnomalyStat
-  | CategoryBreakdownStat;
+  | CategoryBreakdownStat
+  | YearOverYearStat
+  | MarginTrendStat
+  | SeasonalProjectionStat;
 
 export interface ScoredInsight {
   stat: ComputedStat;

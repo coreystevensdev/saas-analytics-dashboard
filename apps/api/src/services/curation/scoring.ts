@@ -52,6 +52,12 @@ function noveltyScore(stat: ComputedStat): number {
   switch (stat.statType) {
     case StatType.Anomaly:
       return 0.9;
+    case StatType.SeasonalProjection:
+      return 0.85;
+    case StatType.YearOverYear:
+      return Math.abs(stat.details.changePercent) > 15 ? 0.85 : 0.6;
+    case StatType.MarginTrend:
+      return stat.details.direction !== 'stable' ? 0.8 : 0.35;
     case StatType.Trend:
       return Math.abs(stat.details.growthPercent) > scoringConfig.thresholds.significantChangePercent ? 0.8 : 0.4;
     case StatType.CategoryBreakdown:
@@ -67,6 +73,12 @@ function actionabilityScore(stat: ComputedStat): number {
   switch (stat.statType) {
     case StatType.Anomaly:
       return Math.abs(stat.details.zScore) >= scoringConfig.thresholds.anomalyZScore ? 0.9 : 0.5;
+    case StatType.SeasonalProjection:
+      return stat.details.confidence === 'high' ? 0.9 : 0.7;
+    case StatType.MarginTrend:
+      return stat.details.direction === 'shrinking' ? 0.9 : 0.5;
+    case StatType.YearOverYear:
+      return Math.abs(stat.details.changePercent) > 10 ? 0.8 : 0.4;
     case StatType.Trend:
       return Math.abs(stat.details.growthPercent) > scoringConfig.thresholds.significantChangePercent ? 0.85 : 0.3;
     case StatType.CategoryBreakdown:
@@ -79,10 +91,18 @@ function actionabilityScore(stat: ComputedStat): number {
 }
 
 function specificityScore(stat: ComputedStat): number {
-  if (stat.category !== null) {
-    return stat.statType === StatType.Anomaly ? 0.95 : 0.7;
+  switch (stat.statType) {
+    case StatType.Anomaly:
+      return stat.category !== null ? 0.95 : 0.7;
+    case StatType.SeasonalProjection:
+      return 0.85;
+    case StatType.MarginTrend:
+      return 0.8;
+    case StatType.YearOverYear:
+      return 0.75;
+    default:
+      return stat.category !== null ? 0.7 : 0.2;
   }
-  return 0.2;
 }
 
 export function scoreInsights(stats: ComputedStat[]): ScoredInsight[] {

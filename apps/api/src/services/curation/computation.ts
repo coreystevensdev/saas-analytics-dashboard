@@ -220,6 +220,180 @@ function computeCategoryBreakdowns(
   return stats;
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+function computeYearOverYear(rows: DataRow[]): ComputedStat[] {
+  const revenueByYearMonth = new Map<number, Map<number, number>>();
+
+  for (const row of rows) {
+    if (row.parentCategory !== 'Income') continue;
+    const amt = parseAmount(row.amount);
+    if (amt === null) continue;
+
+    const year = row.date.getFullYear();
+    const month = row.date.getMonth();
+    if (!revenueByYearMonth.has(year)) revenueByYearMonth.set(year, new Map());
+    const ym = revenueByYearMonth.get(year)!;
+    ym.set(month, (ym.get(month) ?? 0) + amt);
+  }
+
+  const years = [...revenueByYearMonth.keys()].sort();
+  if (years.length < 2) return [];
+
+  const currentYear = years[years.length - 1]!;
+  const priorYear = years[years.length - 2]!;
+  const currentMap = revenueByYearMonth.get(currentYear)!;
+  const priorMap = revenueByYearMonth.get(priorYear)!;
+
+  const stats: ComputedStat[] = [];
+
+  for (const [month, current] of currentMap) {
+    const prior = priorMap.get(month);
+    if (!prior || prior === 0) continue;
+
+    const changePercent = ((current - prior) / prior) * 100;
+    if (Math.abs(changePercent) < 3) continue;
+
+    stats.push({
+      statType: StatType.YearOverYear,
+      category: 'Revenue',
+      value: current,
+      comparison: prior,
+      details: {
+        currentYear: current,
+        priorYear: prior,
+        currentYearLabel: String(currentYear),
+        priorYearLabel: String(priorYear),
+        changePercent: Math.round(changePercent * 10) / 10,
+        month: MONTH_NAMES[month]!,
+      },
+    });
+  }
+
+  return stats;
+}
+
+function computeMarginTrend(rows: DataRow[]): ComputedStat[] {
+  const revenueByMonth = new Map<string, number>();
+  const expenseByMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    const amt = parseAmount(row.amount);
+    if (amt === null) continue;
+
+    const key = `${row.date.getFullYear()}-${String(row.date.getMonth() + 1).padStart(2, '0')}`;
+    if (row.parentCategory === 'Income') {
+      revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + amt);
+    } else if (row.parentCategory === 'Expenses') {
+      expenseByMonth.set(key, (expenseByMonth.get(key) ?? 0) + amt);
+    }
+  }
+
+  const months = [...new Set([...revenueByMonth.keys(), ...expenseByMonth.keys()])].sort();
+  if (months.length < 4) return [];
+
+  const half = Math.floor(months.length / 2);
+  const recentMonths = months.slice(half);
+  const priorMonths = months.slice(0, half);
+
+  const recentRevenue = recentMonths.reduce((s, m) => s + (revenueByMonth.get(m) ?? 0), 0);
+  const recentExpense = recentMonths.reduce((s, m) => s + (expenseByMonth.get(m) ?? 0), 0);
+  const priorRevenue = priorMonths.reduce((s, m) => s + (revenueByMonth.get(m) ?? 0), 0);
+  const priorExpense = priorMonths.reduce((s, m) => s + (expenseByMonth.get(m) ?? 0), 0);
+
+  if (recentRevenue === 0 || priorRevenue === 0) return [];
+
+  const recentMargin = ((recentRevenue - recentExpense) / recentRevenue) * 100;
+  const priorMargin = ((priorRevenue - priorExpense) / priorRevenue) * 100;
+  const diff = recentMargin - priorMargin;
+
+  const direction = Math.abs(diff) < 2 ? 'stable' as const
+    : diff > 0 ? 'expanding' as const
+    : 'shrinking' as const;
+
+  const revenueGrowth = ((recentRevenue - priorRevenue) / priorRevenue) * 100;
+  const expenseGrowth = ((recentExpense - priorExpense) / priorExpense) * 100;
+
+  return [{
+    statType: StatType.MarginTrend,
+    category: null,
+    value: recentMargin,
+    comparison: priorMargin,
+    details: {
+      recentMarginPercent: Math.round(recentMargin * 10) / 10,
+      priorMarginPercent: Math.round(priorMargin * 10) / 10,
+      direction,
+      revenueGrowthPercent: Math.round(revenueGrowth * 10) / 10,
+      expenseGrowthPercent: Math.round(expenseGrowth * 10) / 10,
+    },
+  }];
+}
+
+function computeSeasonalProjection(rows: DataRow[]): ComputedStat[] {
+  const revenueByYearMonth = new Map<number, Map<number, number>>();
+
+  for (const row of rows) {
+    if (row.parentCategory !== 'Income') continue;
+    const amt = parseAmount(row.amount);
+    if (amt === null) continue;
+
+    const year = row.date.getFullYear();
+    const month = row.date.getMonth();
+    if (!revenueByYearMonth.has(year)) revenueByYearMonth.set(year, new Map());
+    revenueByYearMonth.get(year)!.set(month, (revenueByYearMonth.get(year)!.get(month) ?? 0) + amt);
+  }
+
+  const years = [...revenueByYearMonth.keys()].sort();
+  if (years.length < 2) return [];
+
+  const latestYear = years[years.length - 1]!;
+  const latestMonths = [...(revenueByYearMonth.get(latestYear)?.keys() ?? [])].sort((a, b) => a - b);
+  if (latestMonths.length === 0) return [];
+
+  const lastMonth = latestMonths[latestMonths.length - 1]!;
+  const nextMonth = (lastMonth + 1) % 12;
+  const nextYear = nextMonth === 0 ? latestYear + 1 : latestYear;
+
+  const basisValues: number[] = [];
+  const basisMonths: string[] = [];
+  for (const year of years) {
+    const val = revenueByYearMonth.get(year)?.get(nextMonth);
+    if (val !== undefined) {
+      basisValues.push(val);
+      basisMonths.push(`${MONTH_NAMES[nextMonth]} ${year}`);
+    }
+  }
+
+  if (basisValues.length === 0) return [];
+
+  const latestYearGrowth = years.length >= 2
+    ? (() => {
+        const curr = [...(revenueByYearMonth.get(latestYear)?.values() ?? [])].reduce((s, v) => s + v, 0);
+        const prev = [...(revenueByYearMonth.get(years[years.length - 2]!)?.values() ?? [])].reduce((s, v) => s + v, 0);
+        return prev > 0 ? (curr - prev) / prev : 0;
+      })()
+    : 0;
+
+  const baseProjection = mean(basisValues);
+  const projected = Math.round(baseProjection * (1 + latestYearGrowth));
+  const confidence = basisValues.length >= 3 ? 'high' as const
+    : basisValues.length === 2 ? 'moderate' as const
+    : 'low' as const;
+
+  return [{
+    statType: StatType.SeasonalProjection,
+    category: 'Revenue',
+    value: projected,
+    details: {
+      projectedMonth: `${MONTH_NAMES[nextMonth]} ${nextYear}`,
+      projectedAmount: projected,
+      basisMonths,
+      basisValues,
+      confidence,
+    },
+  }];
+}
+
 export function computeStats(
   rows: DataRow[],
   opts?: { trendMinPoints?: number },
@@ -243,5 +417,8 @@ export function computeStats(
     ...computeTrends(groups, trendMinPoints),
     ...detectAnomalies(groups),
     ...computeCategoryBreakdowns(groups),
+    ...computeYearOverYear(rows),
+    ...computeMarginTrend(rows),
+    ...computeSeasonalProjection(rows),
   ];
 }
