@@ -4,7 +4,7 @@ import {
   demoModeStateSchema,
   datasetSchema,
   dataRowSchema,
-} from './datasets.js';
+} from './datasets';
 
 describe('dataset schemas', () => {
   describe('sourceTypeSchema', () => {
