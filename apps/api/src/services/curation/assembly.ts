@@ -54,6 +54,14 @@ function formatStat(insight: ScoredInsight): string {
     }
     case StatType.CategoryBreakdown:
       return `- [${category}] Breakdown: ${stat.details.percentage.toFixed(1)}% of total ($${usd.format(stat.details.absoluteTotal)}, ${stat.details.transactionCount} transactions, range: $${stat.details.min.toFixed(0)}-$${stat.details.max.toFixed(0)}, relevance: ${score.toFixed(2)})`;
+    case StatType.YearOverYear:
+      return `- [${category}] Year-over-Year (${stat.details.month}): $${usd.format(stat.details.currentYear)} in ${stat.details.currentYearLabel} vs $${usd.format(stat.details.priorYear)} in ${stat.details.priorYearLabel} (${stat.details.changePercent >= 0 ? '+' : ''}${stat.details.changePercent.toFixed(1)}%, relevance: ${score.toFixed(2)})`;
+    case StatType.MarginTrend: {
+      const dir = stat.details.direction;
+      return `- [Overall] Margin Trend: ${dir} — recent ${stat.details.recentMarginPercent.toFixed(1)}% vs prior ${stat.details.priorMarginPercent.toFixed(1)}% (revenue ${stat.details.revenueGrowthPercent >= 0 ? '+' : ''}${stat.details.revenueGrowthPercent.toFixed(1)}%, expenses ${stat.details.expenseGrowthPercent >= 0 ? '+' : ''}${stat.details.expenseGrowthPercent.toFixed(1)}%, relevance: ${score.toFixed(2)})`;
+    }
+    case StatType.SeasonalProjection:
+      return `- [${category}] Seasonal Projection: ${stat.details.projectedMonth} estimated at $${usd.format(stat.details.projectedAmount)} based on ${stat.details.basisMonths.join(', ')} (confidence: ${stat.details.confidence}, relevance: ${score.toFixed(2)})`;
   }
 }
 
