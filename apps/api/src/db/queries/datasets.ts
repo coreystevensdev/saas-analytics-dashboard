@@ -1,7 +1,7 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import type { DemoModeState } from 'shared/types';
 import { db, type DbTransaction } from '../../lib/db.js';
-import { datasets } from '../schema.js';
+import { datasets, dataRows, aiSummaries, shares } from '../schema.js';
 import type { NormalizedRow } from '../../services/dataIngestion/normalizer.js';
 // Deliberate cross-query imports — persistUpload orchestrates both query modules.
 // Do NOT add imports from datasets.ts into dataRows.ts (circular dependency risk).
@@ -89,4 +89,105 @@ export async function deleteSeedDatasets(
   return client
     .delete(datasets)
     .where(and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, true)));
+}
+
+export async function getDatasetById(
+  orgId: number,
+  datasetId: number,
+  client: typeof db | DbTransaction = db,
+) {
+  return client.query.datasets.findFirst({
+    where: and(eq(datasets.orgId, orgId), eq(datasets.id, datasetId)),
+  });
+}
+
+export async function getDatasetWithCounts(
+  orgId: number,
+  datasetId: number,
+  client: typeof db | DbTransaction = db,
+) {
+  const dataset = await client.query.datasets.findFirst({
+    where: and(eq(datasets.orgId, orgId), eq(datasets.id, datasetId)),
+  });
+  if (!dataset) return null;
+
+  const [[rowCount], [summaryCount], [shareCount]] = await Promise.all([
+    client
+      .select({ count: sql<number>`count(*)::int` })
+      .from(dataRows)
+      .where(and(eq(dataRows.orgId, orgId), eq(dataRows.datasetId, datasetId))),
+    client
+      .select({ count: sql<number>`count(*)::int` })
+      .from(aiSummaries)
+      .where(and(eq(aiSummaries.orgId, orgId), eq(aiSummaries.datasetId, datasetId))),
+    client
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shares)
+      .where(and(eq(shares.orgId, orgId), eq(shares.datasetId, datasetId))),
+  ]);
+
+  return {
+    ...dataset,
+    rowCount: rowCount?.count ?? 0,
+    summaryCount: summaryCount?.count ?? 0,
+    shareCount: shareCount?.count ?? 0,
+  };
+}
+
+export async function getDatasetListWithCounts(
+  orgId: number,
+  activeDatasetId: number | null,
+  client: typeof db | DbTransaction = db,
+) {
+  const list = await client.query.datasets.findMany({
+    where: and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, false)),
+    orderBy: desc(datasets.createdAt),
+    with: { uploader: true },
+  });
+
+  const withCounts = await Promise.all(
+    list.map(async (ds) => {
+      const [[rowCount]] = await Promise.all([
+        client
+          .select({ count: sql<number>`count(*)::int` })
+          .from(dataRows)
+          .where(and(eq(dataRows.orgId, orgId), eq(dataRows.datasetId, ds.id))),
+      ]);
+      return { ...ds, rowCount: rowCount?.count ?? 0, isActive: ds.id === activeDatasetId };
+    }),
+  );
+
+  return withCounts;
+}
+
+export async function updateDatasetName(
+  orgId: number,
+  datasetId: number,
+  name: string,
+  client: typeof db | DbTransaction = db,
+) {
+  const [updated] = await client
+    .update(datasets)
+    .set({ name })
+    .where(and(eq(datasets.id, datasetId), eq(datasets.orgId, orgId)))
+    .returning();
+  return updated ?? null;
+}
+
+export async function deleteDataset(
+  orgId: number,
+  datasetId: number,
+  client: typeof db | DbTransaction = db,
+) {
+  const [deleted] = await client
+    .delete(datasets)
+    .where(
+      and(
+        eq(datasets.id, datasetId),
+        eq(datasets.orgId, orgId),
+        ne(datasets.isSeedData, true),
+      ),
+    )
+    .returning();
+  return deleted ?? null;
 }
