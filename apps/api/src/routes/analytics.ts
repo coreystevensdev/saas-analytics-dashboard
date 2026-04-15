@@ -2,7 +2,9 @@ import { Router } from 'express';
 
 import type { AuthenticatedRequest } from '../middleware/authMiddleware.js';
 import { trackEvent } from '../services/analytics/trackEvent.js';
-import type { AnalyticsEventName } from 'shared/constants';
+import { ANALYTICS_EVENTS, type AnalyticsEventName } from 'shared/constants';
+
+const VALID_EVENTS = new Set<string>(Object.values(ANALYTICS_EVENTS));
 
 const analyticsRouter = Router();
 
@@ -17,6 +19,11 @@ analyticsRouter.post('/events', (req, res) => {
 
   if (!eventName || typeof eventName !== 'string') {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'eventName is required' } });
+    return;
+  }
+
+  if (!VALID_EVENTS.has(eventName)) {
+    res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Unknown event name' } });
     return;
   }
 

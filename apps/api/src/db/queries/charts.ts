@@ -1,4 +1,4 @@
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, asc, type SQL } from 'drizzle-orm';
 import type { ChartFilters, Granularity } from 'shared/types';
 import { db, type DbTransaction } from '../../lib/db.js';
 import { dataRows } from '../schema.js';
@@ -49,13 +49,15 @@ function bucketLabel(key: string, granularity: Granularity): string {
 }
 
 /**
- * Aggregates an org's data_rows into chart-ready structures.
+ * Aggregates data_rows into chart-ready structures.
+ *
+ * When datasetId is provided, only rows for that dataset are loaded.
+ * Otherwise falls back to all rows for the org (seed org / legacy callers).
  *
  * Metadata (availableCategories, dateRange) always reflects the full dataset
  * so filter controls show all options regardless of current filter state.
  * Actual chart data is filtered by the provided params.
  *
- * Runs a single query, filters + aggregates in JS.
  * Capped at `limit` rows (default 2,000) — enough for chart visualization.
  * The curation pipeline uses getRowsByDataset() which stays unlimited.
  */
@@ -64,11 +66,15 @@ export async function getChartData(
   filters?: ChartFilters,
   limit = DEFAULT_CHART_ROW_LIMIT,
   client: typeof db | DbTransaction = db,
+  datasetId?: number,
 ) {
   const granularity: Granularity = filters?.granularity ?? 'monthly';
 
+  const conditions: SQL[] = [eq(dataRows.orgId, orgId)];
+  if (datasetId !== undefined) conditions.push(eq(dataRows.datasetId, datasetId));
+
   const rows = await client.query.dataRows.findMany({
-    where: eq(dataRows.orgId, orgId),
+    where: and(...conditions),
     orderBy: asc(dataRows.date),
     limit,
   });

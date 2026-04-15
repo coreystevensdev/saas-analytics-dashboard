@@ -26,13 +26,10 @@ datasetManagementRouter.get('/manage', async (req, res: Response) => {
   const user = authedUser(req);
   const { org_id: orgId, isAdmin } = user;
 
-  const activeDatasetId = await withRlsContext(orgId, isAdmin, (tx) =>
-    orgsQueries.getActiveDatasetId(orgId, tx),
-  );
-
-  const datasets = await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.getDatasetListWithCounts(orgId, activeDatasetId, tx),
-  );
+  const datasets = await withRlsContext(orgId, isAdmin, async (tx) => {
+    const activeDatasetId = await orgsQueries.getActiveDatasetId(orgId, tx);
+    return datasetsQueries.getDatasetListWithCounts(orgId, activeDatasetId, tx);
+  });
 
   res.json({ data: datasets });
 });
@@ -43,14 +40,16 @@ datasetManagementRouter.get('/manage/:id', async (req, res: Response) => {
   const { org_id: orgId, isAdmin } = user;
   const datasetId = parseDatasetId(req.params.id);
 
-  const [activeDatasetId, dataset] = await Promise.all([
-    withRlsContext(orgId, isAdmin, (tx) => orgsQueries.getActiveDatasetId(orgId, tx)),
-    withRlsContext(orgId, isAdmin, (tx) => datasetsQueries.getDatasetWithCounts(orgId, datasetId, tx)),
-  ]);
+  const result = await withRlsContext(orgId, isAdmin, async (tx) => {
+    const [activeId, ds] = await Promise.all([
+      orgsQueries.getActiveDatasetId(orgId, tx),
+      datasetsQueries.getDatasetWithCounts(orgId, datasetId, tx),
+    ]);
+    if (!ds) throw new NotFoundError('Dataset not found');
+    return { ...ds, isActive: ds.id === activeId };
+  });
 
-  if (!dataset) throw new NotFoundError('Dataset not found');
-
-  res.json({ data: { ...dataset, isActive: dataset.id === activeDatasetId } });
+  res.json({ data: result });
 });
 
 // PATCH /datasets/manage/:id — rename
@@ -68,14 +67,12 @@ datasetManagementRouter.patch('/manage/:id', async (req, res: Response) => {
     throw new ValidationError('name must be between 1 and 255 characters');
   }
 
-  const existing = await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.getDatasetById(orgId, datasetId, tx),
-  );
-  if (!existing) throw new NotFoundError('Dataset not found');
-
-  const updated = await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.updateDatasetName(orgId, datasetId, name, tx),
-  );
+  const { existing, updated } = await withRlsContext(orgId, isAdmin, async (tx) => {
+    const found = await datasetsQueries.getDatasetById(orgId, datasetId, tx);
+    if (!found) throw new NotFoundError('Dataset not found');
+    const renamed = await datasetsQueries.updateDatasetName(orgId, datasetId, name, tx);
+    return { existing: found, updated: renamed };
+  });
 
   logger.info({ orgId, datasetId, oldName: existing.name, newName: name }, 'dataset renamed');
 
@@ -95,38 +92,28 @@ datasetManagementRouter.delete('/manage/:id', roleGuard('owner'), async (req, re
   const userId = parseInt(sub, 10);
   const datasetId = parseDatasetId(typeof req.params.id === 'string' ? req.params.id : undefined);
 
-  const existing = await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.getDatasetWithCounts(orgId, datasetId, tx),
-  );
-  if (!existing) throw new NotFoundError('Dataset not found');
+  const { existing, newActiveDatasetId } = await withRlsContext(orgId, isAdmin, async (tx) => {
+    const found = await datasetsQueries.getDatasetWithCounts(orgId, datasetId, tx);
+    if (!found) throw new NotFoundError('Dataset not found');
 
-  await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.deleteDataset(orgId, datasetId, tx),
-  );
+    await datasetsQueries.deleteDataset(orgId, datasetId, tx);
 
-  // ON DELETE SET NULL already cleared active_dataset_id if this was active.
-  // If it's now null, promote the next newest non-seed dataset automatically.
-  let newActiveDatasetId: number | null = null;
+    // ON DELETE SET NULL already cleared active_dataset_id if this was active.
+    // Promote the next newest non-seed dataset if active is now null.
+    const currentActive = await orgsQueries.getActiveDatasetId(orgId, tx);
+    let nextActiveId: number | null = currentActive;
 
-  const currentActive = await withRlsContext(orgId, isAdmin, (tx) =>
-    orgsQueries.getActiveDatasetId(orgId, tx),
-  );
-
-  if (currentActive === null) {
-    const remaining = await withRlsContext(orgId, isAdmin, (tx) =>
-      datasetsQueries.getDatasetsByOrg(orgId, tx),
-    );
-    const next = remaining.find((ds) => !ds.isSeedData) ?? null;
-
-    if (next) {
-      await withRlsContext(orgId, isAdmin, (tx) =>
-        orgsQueries.setActiveDataset(orgId, next.id, tx),
-      );
-      newActiveDatasetId = next.id;
+    if (currentActive === null) {
+      const remaining = await datasetsQueries.getDatasetsByOrg(orgId, tx);
+      const next = remaining.find((ds) => !ds.isSeedData) ?? null;
+      if (next) {
+        await orgsQueries.setActiveDataset(orgId, next.id, tx);
+        nextActiveId = next.id;
+      }
     }
-  } else {
-    newActiveDatasetId = currentActive;
-  }
+
+    return { existing: found, newActiveDatasetId: nextActiveId };
+  });
 
   logger.info({ orgId, datasetId, newActiveDatasetId }, 'dataset deleted');
 
@@ -147,18 +134,14 @@ datasetManagementRouter.post('/manage/:id/activate', async (req, res: Response) 
   const userId = parseInt(sub, 10);
   const datasetId = parseDatasetId(req.params.id);
 
-  const dataset = await withRlsContext(orgId, isAdmin, (tx) =>
-    datasetsQueries.getDatasetById(orgId, datasetId, tx),
-  );
-  if (!dataset) throw new NotFoundError('Dataset not found');
+  const previousDatasetId = await withRlsContext(orgId, isAdmin, async (tx) => {
+    const dataset = await datasetsQueries.getDatasetById(orgId, datasetId, tx);
+    if (!dataset) throw new NotFoundError('Dataset not found');
 
-  const previousDatasetId = await withRlsContext(orgId, isAdmin, (tx) =>
-    orgsQueries.getActiveDatasetId(orgId, tx),
-  );
-
-  await withRlsContext(orgId, isAdmin, (tx) =>
-    orgsQueries.setActiveDataset(orgId, datasetId, tx),
-  );
+    const prevId = await orgsQueries.getActiveDatasetId(orgId, tx);
+    await orgsQueries.setActiveDataset(orgId, datasetId, tx);
+    return prevId;
+  });
 
   logger.info({ orgId, datasetId, previousDatasetId }, 'dataset activated');
 

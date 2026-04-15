@@ -34,6 +34,9 @@ vi.mock('../db/queries/index.js', () => ({
   datasetsQueries: {
     persistUpload: (...args: unknown[]) => mockPersistUpload(...args),
   },
+  orgsQueries: {
+    setActiveDataset: vi.fn().mockResolvedValue(null),
+  },
   subscriptionsQueries: {
     getActiveTier: vi.fn().mockResolvedValue('free'),
   },
