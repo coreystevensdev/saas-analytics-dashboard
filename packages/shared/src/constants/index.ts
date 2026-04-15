@@ -81,6 +81,8 @@ export const AI_MONTHLY_QUOTA = {
   pro: 100,
 } as const;
 
+export const MAX_DATASETS_PER_ORG = 20;
+
 export const CSV_REQUIRED_COLUMNS = ['date', 'amount', 'category'] as const;
 export const CSV_OPTIONAL_COLUMNS = ['label', 'parent_category'] as const;
 export const CSV_MAX_ROWS = 50_000;

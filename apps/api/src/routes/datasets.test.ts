@@ -33,6 +33,7 @@ vi.mock('../lib/logger.js', () => ({
 vi.mock('../db/queries/index.js', () => ({
   datasetsQueries: {
     persistUpload: (...args: unknown[]) => mockPersistUpload(...args),
+    getNonSeedDatasetCount: vi.fn().mockResolvedValue(0),
   },
   orgsQueries: {
     setActiveDataset: vi.fn().mockResolvedValue(null),

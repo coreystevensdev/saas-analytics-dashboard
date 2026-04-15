@@ -101,11 +101,11 @@ describe('withRlsContext', () => {
   it('rejects non-finite orgId values', async () => {
     await expect(
       withRlsContext(NaN, false, async () => null),
-    ).rejects.toThrow('orgId must be a finite number');
+    ).rejects.toThrow('orgId must be a finite integer');
 
     await expect(
       withRlsContext(Infinity, false, async () => null),
-    ).rejects.toThrow('orgId must be a finite number');
+    ).rejects.toThrow('orgId must be a finite integer');
   });
 
   it('rejects non-boolean isAdmin values', async () => {

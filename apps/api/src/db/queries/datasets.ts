@@ -1,4 +1,4 @@
-import { eq, and, desc, ne, sql } from 'drizzle-orm';
+import { eq, and, desc, ne, sql, count } from 'drizzle-orm';
 import type { DemoModeState } from 'shared/types';
 import { db, type DbTransaction } from '../../lib/db.js';
 import { datasets, dataRows, aiSummaries, shares } from '../schema.js';
@@ -89,6 +89,17 @@ export async function deleteSeedDatasets(
   return client
     .delete(datasets)
     .where(and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, true)));
+}
+
+export async function getNonSeedDatasetCount(
+  orgId: number,
+  client: typeof db | DbTransaction = db,
+): Promise<number> {
+  const [row] = await client
+    .select({ value: count() })
+    .from(datasets)
+    .where(and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, false)));
+  return row?.value ?? 0;
 }
 
 export async function getDatasetById(
