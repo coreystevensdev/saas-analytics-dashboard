@@ -14,11 +14,12 @@ export async function withRlsContext<T>(
   isAdmin: boolean,
   fn: (tx: DbTransaction) => Promise<T>,
 ): Promise<T> {
-  if (!Number.isFinite(orgId)) throw new Error('orgId must be a finite number');
+  const safeOrgId = Math.trunc(orgId);
+  if (!Number.isFinite(safeOrgId) || safeOrgId !== orgId) throw new Error('orgId must be a finite integer');
   if (typeof isAdmin !== 'boolean') throw new Error('isAdmin must be a boolean');
 
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL app.current_org_id = '${String(orgId)}'`));
+    await tx.execute(sql.raw(`SET LOCAL app.current_org_id = '${String(safeOrgId)}'`));
     await tx.execute(sql.raw(`SET LOCAL app.is_admin = '${String(isAdmin)}'`));
     return fn(tx);
   });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { env } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { AuthenticationError, ValidationError } from '../lib/appError.js';
@@ -57,7 +57,8 @@ router.post('/auth/callback', rateLimitAuth, async (req: Request, res: Response)
   const { code, state, inviteToken } = parsed.data;
   const storedState = req.cookies?.[AUTH.COOKIE_NAMES.OAUTH_STATE];
 
-  if (!storedState || state !== storedState) {
+  if (!storedState || state.length !== storedState.length
+      || !timingSafeEqual(Buffer.from(state), Buffer.from(storedState))) {
     throw new AuthenticationError('OAuth state mismatch — possible CSRF attack');
   }
 
