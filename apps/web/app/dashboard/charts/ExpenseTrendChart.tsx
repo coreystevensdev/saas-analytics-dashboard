@@ -69,6 +69,13 @@ export function ExpenseTrendChart({ data, categories }: ExpenseTrendChartProps) 
 
   if (data.length === 0) return null;
 
+  // largest at bottom of stack so thin categories don't visually dominate
+  const sorted = [...categories].sort((a, b) => {
+    const totalA = data.reduce((sum, d) => sum + (Number(d[a]) || 0), 0);
+    const totalB = data.reduce((sum, d) => sum + (Number(d[b]) || 0), 0);
+    return totalB - totalA;
+  });
+
   return (
     <figure className="rounded-lg border border-border bg-card p-4 shadow-sm transition-colors duration-200 ease-out hover:border-primary/20 md:p-6">
       <figcaption className="mb-4">
@@ -106,7 +113,7 @@ export function ExpenseTrendChart({ data, categories }: ExpenseTrendChartProps) 
               width={55}
             />
             <Tooltip content={<TrendTooltip />} />
-            {categories.map((cat, i) => (
+            {sorted.map((cat, i) => (
               <Area
                 key={cat}
                 type="monotone"
