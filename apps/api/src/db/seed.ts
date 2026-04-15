@@ -20,8 +20,8 @@ if (!dbUrl) {
 const client = postgres(dbUrl, { max: 1 });
 const db = drizzle(client, { schema });
 
-// 24 months of data for Sunrise Cafe — a fictional coffee shop.
-// Two years (2024–2025) enables year-over-year comparison.
+// Dynamic seed data for Sunrise Cafe — a fictional coffee shop.
+// Starts Jan 2024, ends at the current month so date presets always show data.
 // Anomalies baked in so the curation pipeline has something to interpret.
 function buildSeedRows(orgId: number, datasetId: number) {
   const rows: Array<{
@@ -36,16 +36,20 @@ function buildSeedRows(orgId: number, datasetId: number) {
   }> = [];
 
   const WEEKS_PER_MONTH = 4;
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
 
-  for (let year = 2024; year <= 2025; year++) {
-    const growth = year === 2025 ? 1.12 : 1.0;
-    const months = Array.from({ length: 12 }, (_, i) => i);
+  for (let year = 2024; year <= currentYear; year++) {
+    const yoyGrowth = 1 + 0.12 * (year - 2024);
+    const lastMonth = year === currentYear ? currentMonth : 11;
+    const months = Array.from({ length: lastMonth + 1 }, (_, i) => i);
 
     for (const m of months) {
       // Revenue: $12k–$18k monthly baseline in 2024, +12% in 2025. December spike both years.
       const monthlyRevenue = m === 11 ? 28000 : parseFloat(lerp('12000.00', '18000.00', m));
-      const monthlyPayroll = (year === 2025 && m === 9) ? 9200 : parseFloat(lerp('5500.00', '6500.00', m));
-      const isQ3Dip = year === 2025 && m >= 6 && m <= 8;
+      const monthlyPayroll = (year >= 2025 && m === 9) ? 9200 : parseFloat(lerp('5500.00', '6500.00', m));
+      const isQ3Dip = year >= 2025 && m >= 6 && m <= 8;
       const monthlyMarketing = isQ3Dip
         ? parseFloat(lerp('200.00', '300.00', m - 6))
         : parseFloat(lerp('800.00', '1200.00', m));
@@ -61,7 +65,7 @@ function buildSeedRows(orgId: number, datasetId: number) {
         rows.push({
           orgId, datasetId, sourceType: 'csv',
           category: 'Revenue', parentCategory: 'Income',
-          date, amount: ((monthlyRevenue / WEEKS_PER_MONTH) * growth * jitter()).toFixed(2), label: null,
+          date, amount: ((monthlyRevenue / WEEKS_PER_MONTH) * yoyGrowth * jitter()).toFixed(2), label: null,
         });
 
         rows.push({
