@@ -11,6 +11,17 @@ vi.mock('../../lib/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('../../lib/circuitBreaker.js', () => ({
+  CircuitBreaker: vi.fn().mockImplementation(() => ({
+    exec: <T>(fn: () => Promise<T>) => fn(),
+    isOpen: () => false,
+  })),
+  CircuitOpenError: class CircuitOpenError extends Error {
+    readonly code = 'CIRCUIT_OPEN';
+    constructor(name: string) { super(`Circuit breaker "${name}" is open`); }
+  },
+}));
+
 const mockCreate = vi.fn();
 const mockStream = vi.fn();
 

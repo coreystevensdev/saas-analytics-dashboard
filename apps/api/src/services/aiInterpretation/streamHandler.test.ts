@@ -490,7 +490,7 @@ describe('streamToSSE', () => {
     });
 
     it('does not truncate if word count is under limit', async () => {
-      const shortText = generateWords(100);
+      const shortText = generateWords(40);
       mockStreamInterpretation.mockImplementation(
         async (_prompt: string, onText: (d: string) => void) => {
           onText(shortText);
@@ -512,8 +512,8 @@ describe('streamToSSE', () => {
     });
 
     it('timeout takes precedence over truncation when it fires first', async () => {
-      // stream only 50 words then stall until timeout
-      const shortText = generateWords(50);
+      // stream under the word limit then stall until timeout
+      const shortText = generateWords(30);
       mockStreamInterpretation.mockImplementation(
         async (_prompt: string, onText: (d: string) => void, signal?: AbortSignal) => {
           onText(shortText);
