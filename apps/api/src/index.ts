@@ -23,8 +23,16 @@ const app = express();
 
 app.set('trust proxy', 1); // BFF proxy is the first hop — needed for correct req.ip in rate limiting
 
-// Prometheus metrics — before helmet so scraper doesn't need to handle security headers
-app.get('/metrics', async (_req, res) => {
+// Prometheus metrics — before helmet so scraper doesn't need to handle security headers.
+// Gated by bearer token in production to prevent leaking operational data.
+app.get('/metrics', async (req, res) => {
+  if (env.NODE_ENV === 'production') {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith('Bearer ') || auth.slice(7) !== env.METRICS_TOKEN) {
+      res.status(401).end();
+      return;
+    }
+  }
   res.set('Content-Type', registry.contentType);
   res.end(await registry.metrics());
 });

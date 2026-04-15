@@ -40,12 +40,20 @@ export async function storeSummary(
   return row!;
 }
 
+/** Invalidates cached summaries. Pass datasetId to scope invalidation
+ *  to the affected dataset only — avoids unnecessary Claude API calls. */
 export async function markStale(
   orgId: number,
   client: typeof db | DbTransaction = db,
+  datasetId?: number,
 ) {
+  const conditions = [eq(aiSummaries.orgId, orgId), isNull(aiSummaries.staleAt)];
+  if (datasetId !== undefined) {
+    conditions.push(eq(aiSummaries.datasetId, datasetId));
+  }
+
   await client
     .update(aiSummaries)
     .set({ staleAt: new Date() })
-    .where(and(eq(aiSummaries.orgId, orgId), isNull(aiSummaries.staleAt)));
+    .where(and(...conditions));
 }

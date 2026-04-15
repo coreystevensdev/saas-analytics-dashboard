@@ -139,7 +139,7 @@ describe('GET /dashboard/charts', () => {
     expect(body.data.orgName).toBe('Acme Corp');
     expect(body.data.demoState).toBe('user_only');
     expect(mockWithRlsContext).toHaveBeenCalledWith(10, false, expect.any(Function));
-    expect(mockGetChartData).toHaveBeenCalledWith(10, undefined, undefined, expect.anything());
+    expect(mockGetChartData).toHaveBeenCalledWith(10, undefined, undefined, expect.anything(), 1);
     expect(mockGetSeedOrgId).not.toHaveBeenCalled();
   });
 
