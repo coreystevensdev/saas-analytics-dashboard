@@ -23,7 +23,7 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function bucketExpr(granularity: Granularity) {
+function bucketSql(granularity: Granularity) {
   if (granularity === 'weekly') {
     return sql<string>`to_char(date_trunc('week', ${dataRows.date}), 'YYYY-MM-DD')`;
   }
@@ -54,7 +54,7 @@ export async function getChartData(
 ) {
   const granularity: Granularity = filters?.granularity ?? 'monthly';
   const scope = scopeConditions(orgId, datasetId);
-  const bucket = bucketExpr(granularity);
+  const bucket = bucketSql(granularity);
 
   const [metaRows, aggRows] = await Promise.all([
     client
@@ -75,9 +75,9 @@ export async function getChartData(
           bucket: bucket.as('bucket'),
           parentCategory: dataRows.parentCategory,
           category: dataRows.category,
-          total: sql<string>`sum(${dataRows.amount})`,
-          year: sql<string>`extract(year from ${dataRows.date})::int`,
-          monthIdx: sql<string>`extract(month from ${dataRows.date})::int - 1`,
+          total: sql<string>`sum(${dataRows.amount})`.as('total'),
+          year: sql<number>`extract(year from ${dataRows.date})::int`.as('year'),
+          monthIdx: sql<number>`extract(month from ${dataRows.date})::int - 1`.as('month_idx'),
         })
         .from(dataRows)
         .where(and(...conds))
@@ -135,7 +135,7 @@ export async function getChartData(
     if (row.parentCategory === 'Income') {
       revenueByBucket.set(key, (revenueByBucket.get(key) ?? 0) + amt);
 
-      const year = String(row.year);
+      const year = String(Number(row.year));
       const monthIdx = Number(row.monthIdx);
       if (!revenueByYearMonth.has(year)) revenueByYearMonth.set(year, new Map());
       revenueByYearMonth.get(year)!.set(monthIdx, (revenueByYearMonth.get(year)!.get(monthIdx) ?? 0) + amt);
