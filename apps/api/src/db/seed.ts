@@ -20,8 +20,8 @@ if (!dbUrl) {
 const client = postgres(dbUrl, { max: 1 });
 const db = drizzle(client, { schema });
 
-// Dynamic seed data for Sunrise Cafe — a fictional coffee shop.
-// Starts Jan 2024, ends at the current month so date presets always show data.
+// 12 months of demo data for Sunrise Cafe — a fictional coffee shop.
+// Ends at the current month so date presets always show recent data.
 // Anomalies baked in so the curation pipeline has something to interpret.
 function buildSeedRows(orgId: number, datasetId: number) {
   const rows: Array<{
@@ -37,13 +37,19 @@ function buildSeedRows(orgId: number, datasetId: number) {
 
   const WEEKS_PER_MONTH = 4;
   const now = new Date();
-  const currentYear = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth();
+  const endYear = now.getUTCFullYear();
+  const endMonth = now.getUTCMonth();
 
-  for (let year = 2024; year <= currentYear; year++) {
-    const yoyGrowth = 1 + 0.12 * (year - 2024);
-    const lastMonth = year === currentYear ? currentMonth : 11;
-    const months = Array.from({ length: lastMonth + 1 }, (_, i) => i);
+  // 12 months back from current month
+  const startDate = new Date(Date.UTC(endYear, endMonth - 11, 1));
+  const startYear = startDate.getUTCFullYear();
+  const startMonth = startDate.getUTCMonth();
+
+  for (let year = startYear; year <= endYear; year++) {
+    const yoyGrowth = 1.0;
+    const firstM = year === startYear ? startMonth : 0;
+    const lastM = year === endYear ? endMonth : 11;
+    const months = Array.from({ length: lastM - firstM + 1 }, (_, i) => firstM + i);
 
     for (const m of months) {
       // Revenue: $12k–$18k monthly baseline in 2024, +12% in 2025. December spike both years.
