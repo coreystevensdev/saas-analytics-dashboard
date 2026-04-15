@@ -1,4 +1,4 @@
-import { eq, and, asc, type SQL } from 'drizzle-orm';
+import { eq, and, sql, gte, lte, type SQL } from 'drizzle-orm';
 import type { ChartFilters, Granularity } from 'shared/types';
 import { db, type DbTransaction } from '../../lib/db.js';
 import { dataRows } from '../schema.js';
@@ -7,35 +7,6 @@ const MONTH_LABELS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ] as const;
-
-const DEFAULT_CHART_ROW_LIMIT = 2000;
-
-function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function isInDateRange(rowDate: Date, from?: Date, to?: Date): boolean {
-  const d = toISODate(rowDate);
-  if (from && d < toISODate(from)) return false;
-  if (to && d > toISODate(to)) return false;
-  return true;
-}
-
-function mondayOfWeek(d: Date): Date {
-  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const dayOfWeek = copy.getDay();
-  const offset = (dayOfWeek + 6) % 7;
-  copy.setDate(copy.getDate() - offset);
-  return copy;
-}
-
-function bucketKey(d: Date, granularity: Granularity): string {
-  if (granularity === 'weekly') {
-    const mon = mondayOfWeek(d);
-    return `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
-  }
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 function bucketLabel(key: string, granularity: Granularity): string {
   if (granularity === 'weekly') {
@@ -48,54 +19,106 @@ function bucketLabel(key: string, granularity: Granularity): string {
   return `${MONTH_LABELS[monthIdx]} ${year}`;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function bucketExpr(granularity: Granularity) {
+  if (granularity === 'weekly') {
+    return sql<string>`to_char(date_trunc('week', ${dataRows.date}), 'YYYY-MM-DD')`;
+  }
+  return sql<string>`to_char(date_trunc('month', ${dataRows.date}), 'YYYY-MM')`;
+}
+
+function scopeConditions(orgId: number, datasetId?: number): SQL[] {
+  const conds: SQL[] = [eq(dataRows.orgId, orgId)];
+  if (datasetId !== undefined) conds.push(eq(dataRows.datasetId, datasetId));
+  return conds;
+}
+
 /**
- * Aggregates data_rows into chart-ready structures.
+ * Aggregates data_rows into chart-ready structures using SQL aggregation.
  *
- * When datasetId is provided, only rows for that dataset are loaded.
- * Otherwise falls back to all rows for the org (seed org / legacy callers).
+ * Two queries:
+ * 1. Metadata (unfiltered) — distinct expense categories + date range
+ * 2. Aggregated buckets (filtered) — SUM(amount) grouped by time bucket + category
  *
- * Metadata (availableCategories, dateRange) always reflects the full dataset
- * so filter controls show all options regardless of current filter state.
- * Actual chart data is filtered by the provided params.
- *
- * Capped at `limit` rows (default 2,000) — enough for chart visualization.
- * The curation pipeline uses getRowsByDataset() which stays unlimited.
+ * Returns ~50-200 rows from the DB instead of 2,000 individual data_rows.
  */
 export async function getChartData(
   orgId: number,
   filters?: ChartFilters,
-  limit = DEFAULT_CHART_ROW_LIMIT,
+  _limit?: number,
   client: typeof db | DbTransaction = db,
   datasetId?: number,
 ) {
   const granularity: Granularity = filters?.granularity ?? 'monthly';
+  const scope = scopeConditions(orgId, datasetId);
+  const bucket = bucketExpr(granularity);
 
-  const conditions: SQL[] = [eq(dataRows.orgId, orgId)];
-  if (datasetId !== undefined) conditions.push(eq(dataRows.datasetId, datasetId));
+  const [metaRows, aggRows] = await Promise.all([
+    client
+      .select({
+        minDate: sql<string>`min(${dataRows.date})::text`,
+        maxDate: sql<string>`max(${dataRows.date})::text`,
+      })
+      .from(dataRows)
+      .where(and(...scope)),
 
-  const rows = await client.query.dataRows.findMany({
-    where: and(...conditions),
-    orderBy: asc(dataRows.date),
-    limit,
-  });
+    (() => {
+      const conds = [...scope];
+      if (filters?.dateFrom) conds.push(gte(dataRows.date, filters.dateFrom));
+      if (filters?.dateTo) conds.push(lte(dataRows.date, filters.dateTo));
 
-  const categorySet = new Set<string>();
-  let minDate: Date | null = null;
-  let maxDate: Date | null = null;
+      return client
+        .select({
+          bucket: bucket.as('bucket'),
+          parentCategory: dataRows.parentCategory,
+          category: dataRows.category,
+          total: sql<string>`sum(${dataRows.amount})`,
+          year: sql<string>`extract(year from ${dataRows.date})::int`,
+          monthIdx: sql<string>`extract(month from ${dataRows.date})::int - 1`,
+        })
+        .from(dataRows)
+        .where(and(...conds))
+        .groupBy(
+          bucket,
+          dataRows.parentCategory,
+          dataRows.category,
+          sql`extract(year from ${dataRows.date})`,
+          sql`extract(month from ${dataRows.date})`,
+        )
+        .orderBy(bucket);
+    })(),
+  ]);
 
-  for (const row of rows) {
-    if (row.parentCategory === 'Expenses') {
-      categorySet.add(row.category);
-    }
-    if (!minDate || row.date < minDate) minDate = row.date;
-    if (!maxDate || row.date > maxDate) maxDate = row.date;
-  }
-
-  const availableCategories = [...categorySet].sort();
-  const dateRange = minDate && maxDate
-    ? { min: toISODate(minDate), max: toISODate(maxDate) }
+  // -- metadata (unfiltered) --
+  const meta = metaRows[0];
+  const dateRange = meta?.minDate && meta?.maxDate
+    ? { min: meta.minDate, max: meta.maxDate }
     : null;
 
+  // categories come from the aggregated rows (all expense categories present in data)
+  // but we need unfiltered categories for the filter dropdown. If date filters are active,
+  // a category might be absent from aggRows. We'll collect from a quick distinct query only
+  // when filters could hide categories.
+  let availableCategories: string[];
+  if (filters?.dateFrom || filters?.dateTo) {
+    const catRows = await client
+      .selectDistinct({ category: dataRows.category })
+      .from(dataRows)
+      .where(and(...scope, eq(dataRows.parentCategory, 'Expenses')))
+      .orderBy(dataRows.category);
+    availableCategories = catRows.map((r) => r.category);
+  } else {
+    const catSet = new Set<string>();
+    for (const row of aggRows) {
+      if (row.parentCategory === 'Expenses') catSet.add(row.category);
+    }
+    availableCategories = [...catSet].sort();
+  }
+
+  // -- reshape aggregated rows into chart series --
   const activeCategories = filters?.categories?.length
     ? new Set(filters.categories)
     : null;
@@ -103,80 +126,57 @@ export async function getChartData(
   const revenueByBucket = new Map<string, number>();
   const expenseTotals = new Map<string, number>();
   const expenseByBucketCategory = new Map<string, Map<string, number>>();
+  const revenueByYearMonth = new Map<string, Map<number, number>>();
 
-  for (const row of rows) {
-    if (!isInDateRange(row.date, filters?.dateFrom, filters?.dateTo)) continue;
-
-    const amount = parseFloat(row.amount);
-    const key = bucketKey(row.date, granularity);
+  for (const row of aggRows) {
+    const amt = parseFloat(row.total);
+    const key = row.bucket;
 
     if (row.parentCategory === 'Income') {
-      revenueByBucket.set(key, (revenueByBucket.get(key) ?? 0) + amount);
+      revenueByBucket.set(key, (revenueByBucket.get(key) ?? 0) + amt);
+
+      const year = String(row.year);
+      const monthIdx = Number(row.monthIdx);
+      if (!revenueByYearMonth.has(year)) revenueByYearMonth.set(year, new Map());
+      revenueByYearMonth.get(year)!.set(monthIdx, (revenueByYearMonth.get(year)!.get(monthIdx) ?? 0) + amt);
     } else if (row.parentCategory === 'Expenses') {
       if (activeCategories && !activeCategories.has(row.category)) continue;
-      expenseTotals.set(row.category, (expenseTotals.get(row.category) ?? 0) + amount);
+      expenseTotals.set(row.category, (expenseTotals.get(row.category) ?? 0) + amt);
 
       if (!expenseByBucketCategory.has(key)) expenseByBucketCategory.set(key, new Map());
-      const bucketMap = expenseByBucketCategory.get(key)!;
-      bucketMap.set(row.category, (bucketMap.get(row.category) ?? 0) + amount);
+      expenseByBucketCategory.get(key)!.set(row.category, (expenseByBucketCategory.get(key)!.get(row.category) ?? 0) + amt);
     }
   }
 
+  // -- build output series --
   const revenueTrend = [...revenueByBucket.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, revenue]) => ({
-      month: bucketLabel(key, granularity),
-      revenue: Math.round(revenue * 100) / 100,
-    }));
+    .map(([key, revenue]) => ({ month: bucketLabel(key, granularity), revenue: round2(revenue) }));
 
   const expenseBreakdown = [...expenseTotals.entries()]
-    .map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 }))
+    .map(([category, total]) => ({ category, total: round2(total) }))
     .sort((a, b) => b.total - a.total);
 
   const allExpenseCategories = [...expenseTotals.keys()].sort();
   const expenseTrend = [...expenseByBucketCategory.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, catMap]) => {
-      const point: Record<string, string | number> = {
-        month: bucketLabel(key, granularity),
-      };
+      const point: Record<string, string | number> = { month: bucketLabel(key, granularity) };
       for (const cat of allExpenseCategories) {
-        point[cat] = Math.round((catMap.get(cat) ?? 0) * 100) / 100;
+        point[cat] = round2(catMap.get(cat) ?? 0);
       }
       return point;
     });
 
   const allBucketKeys = new Set([...revenueByBucket.keys(), ...expenseByBucketCategory.keys()]);
-  const monthlyComparison = [...allBucketKeys]
-    .sort()
-    .map((key) => {
-      const revenue = Math.round((revenueByBucket.get(key) ?? 0) * 100) / 100;
-      const totalExpense = expenseByBucketCategory.has(key)
-        ? [...expenseByBucketCategory.get(key)!.values()].reduce((s, v) => s + v, 0)
-        : 0;
-      const expenses = Math.round(totalExpense * 100) / 100;
-      return {
-        month: bucketLabel(key, granularity),
-        revenue,
-        expenses,
-        profit: Math.round((revenue - expenses) * 100) / 100,
-      };
-    });
-
-  // YoY comparison — only meaningful with 2+ years of data
-  const revenueByYearMonth = new Map<string, Map<number, number>>();
-  for (const row of rows) {
-    if (!isInDateRange(row.date, filters?.dateFrom, filters?.dateTo)) continue;
-    if (row.parentCategory !== 'Income') continue;
-
-    const year = String(row.date.getFullYear());
-    const monthIdx = row.date.getMonth();
-    const amount = parseFloat(row.amount);
-
-    if (!revenueByYearMonth.has(year)) revenueByYearMonth.set(year, new Map());
-    const yearMap = revenueByYearMonth.get(year)!;
-    yearMap.set(monthIdx, (yearMap.get(monthIdx) ?? 0) + amount);
-  }
+  const monthlyComparison = [...allBucketKeys].sort().map((key) => {
+    const revenue = round2(revenueByBucket.get(key) ?? 0);
+    const totalExpense = expenseByBucketCategory.has(key)
+      ? [...expenseByBucketCategory.get(key)!.values()].reduce((s, v) => s + v, 0)
+      : 0;
+    const expenses = round2(totalExpense);
+    return { month: bucketLabel(key, granularity), revenue, expenses, profit: round2(revenue - expenses) };
+  });
 
   const years = [...revenueByYearMonth.keys()].sort();
   const yoyComparison = years.length >= 2
@@ -188,8 +188,8 @@ export async function getChartData(
         const changePercent = prior > 0 ? Math.round(((current - prior) / prior) * 1000) / 10 : null;
         return {
           month: MONTH_LABELS[monthIdx]!,
-          currentYear: Math.round(current * 100) / 100,
-          priorYear: Math.round(prior * 100) / 100,
+          currentYear: round2(current),
+          priorYear: round2(prior),
           changePercent,
           currentYearLabel: currentYear,
           priorYearLabel: priorYear,
