@@ -4,14 +4,14 @@ import { env } from '../config.js';
 import * as schema from '../db/schema.js';
 
 export const queryClient = postgres(env.DATABASE_URL, {
-  max: 10,
+  max: 25,
   idle_timeout: 20,
   connect_timeout: 10,
   onnotice: () => {},
 });
 
 export const adminClient = postgres(env.DATABASE_ADMIN_URL, {
-  max: 5,
+  max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
   onnotice: () => {},

@@ -59,8 +59,7 @@ dashboardRouter.get('/dashboard/charts', async (req: Request, res: Response) => 
         orgId,
         payload.isAdmin,
         async (tx) => {
-          const [cd, ds, activeId] = await Promise.all([
-            chartsQueries.getChartData(orgId, filterArg, undefined, tx),
+          const [ds, activeId] = await Promise.all([
             datasetsQueries.getDatasetsByOrg(orgId, tx),
             orgsQueries.getActiveDatasetId(orgId, tx),
           ]);
@@ -82,9 +81,12 @@ dashboardRouter.get('/dashboard/charts', async (req: Request, res: Response) => 
             ? requestedId
             : (activeId != null && ds.some((d) => d.id === activeId) ? activeId : ds[0]?.id ?? null);
 
-          const rowCount = resolvedId != null
-            ? await dataRowsQueries.getRowCount(orgId, resolvedId, tx)
-            : 0;
+          const [cd, rowCount] = await Promise.all([
+            chartsQueries.getChartData(orgId, filterArg, undefined, tx, resolvedId ?? undefined),
+            resolvedId != null
+              ? dataRowsQueries.getRowCount(orgId, resolvedId, tx)
+              : Promise.resolve(0),
+          ]);
 
           return { chartData: cd, datasets: ds, demoState: state, activeDatasetId: resolvedId, datasetRowCount: rowCount };
         },

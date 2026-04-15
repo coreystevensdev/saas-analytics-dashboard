@@ -115,6 +115,7 @@ export const analyticsEvents = pgTable(
     index('idx_analytics_events_org_id').on(table.orgId),
     index('idx_analytics_events_event_name').on(table.eventName),
     index('idx_analytics_events_created_at').on(table.createdAt),
+    index('idx_analytics_events_ai_usage').on(table.orgId, table.eventName, table.createdAt),
   ],
 );
 

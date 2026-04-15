@@ -139,25 +139,27 @@ export async function getDatasetListWithCounts(
   activeDatasetId: number | null,
   client: typeof db | DbTransaction = db,
 ) {
-  const list = await client.query.datasets.findMany({
-    where: and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, false)),
-    orderBy: desc(datasets.createdAt),
-    with: { uploader: true },
-  });
+  const rows = await client
+    .select({
+      id: datasets.id,
+      orgId: datasets.orgId,
+      name: datasets.name,
+      sourceType: datasets.sourceType,
+      isSeedData: datasets.isSeedData,
+      uploadedBy: datasets.uploadedBy,
+      createdAt: datasets.createdAt,
+      rowCount: sql<number>`coalesce(count(${dataRows.id}), 0)::int`,
+    })
+    .from(datasets)
+    .leftJoin(dataRows, eq(dataRows.datasetId, datasets.id))
+    .where(and(eq(datasets.orgId, orgId), eq(datasets.isSeedData, false)))
+    .groupBy(datasets.id)
+    .orderBy(desc(datasets.createdAt));
 
-  const withCounts = await Promise.all(
-    list.map(async (ds) => {
-      const [[rowCount]] = await Promise.all([
-        client
-          .select({ count: sql<number>`count(*)::int` })
-          .from(dataRows)
-          .where(and(eq(dataRows.orgId, orgId), eq(dataRows.datasetId, ds.id))),
-      ]);
-      return { ...ds, rowCount: rowCount?.count ?? 0, isActive: ds.id === activeDatasetId };
-    }),
-  );
-
-  return withCounts;
+  return rows.map((ds) => ({
+    ...ds,
+    isActive: ds.id === activeDatasetId,
+  }));
 }
 
 export async function updateDatasetName(
