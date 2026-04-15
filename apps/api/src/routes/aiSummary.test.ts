@@ -35,9 +35,20 @@ vi.mock('../db/queries/index.js', () => ({
   analyticsEventsQueries: {
     getMonthlyAiUsageCount: (...args: unknown[]) => mockGetMonthlyAiUsageCount(...args),
   },
+  dataRowsQueries: {
+    getRowCount: vi.fn().mockResolvedValue(100),
+  },
+  orgsQueries: {
+    getBusinessProfile: vi.fn().mockResolvedValue(null),
+  },
   subscriptionsQueries: {
     getActiveTier: vi.fn().mockResolvedValue('free'),
   },
+}));
+
+vi.mock('../lib/metrics.js', () => ({
+  aiSummaryTotal: { inc: vi.fn() },
+  aiTokensUsed: { inc: vi.fn() },
 }));
 
 const mockTrackEvent = vi.fn();
@@ -127,14 +138,11 @@ describe('GET /ai-summaries/:datasetId', () => {
 
     await fetch(`${baseUrl}/ai-summaries/42`);
 
-    expect(mockStreamToSSE).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      1,
-      42,
-      'free',
-      expect.anything(),
-    );
+    expect(mockStreamToSSE).toHaveBeenCalledOnce();
+    const args = mockStreamToSSE.mock.calls[0]!;
+    expect(args[2]).toBe(1);     // orgId
+    expect(args[3]).toBe(42);    // datasetId
+    expect(args[4]).toBe('free'); // tier
   });
 
   it('rejects invalid datasetId', async () => {
