@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import type { Response, Request } from 'express';
 
+import { ANALYTICS_EVENTS } from 'shared/constants';
+
 import { env, isQbConfigured } from '../config.js';
 import { logger } from '../lib/logger.js';
 import type { AuthenticatedRequest } from '../middleware/authMiddleware.js';
@@ -112,7 +114,7 @@ integrationsRouter.delete('/quickbooks', roleGuard('owner'), async (req: Request
   await integrationConnectionsQueries.deleteByOrgAndProvider(user.org_id, 'quickbooks');
   // BullMQ removeDailySync will be wired in QB-7
 
-  trackEvent(user.org_id, Number(user.sub), 'integration.disconnected' as any, {
+  trackEvent(user.org_id, Number(user.sub), ANALYTICS_EVENTS.INTEGRATION_DISCONNECTED, {
     provider: 'quickbooks',
   });
 
@@ -183,7 +185,7 @@ integrationsCallbackRouter.get('/quickbooks/callback', async (req: Request, res:
     res.clearCookie('qb_oauth_org_id', { path: '/' });
     res.clearCookie('qb_oauth_user_id', { path: '/' });
 
-    trackEvent(orgId, Number(userId), 'integration.connected' as any, {
+    trackEvent(orgId, Number(userId), ANALYTICS_EVENTS.INTEGRATION_CONNECTED, {
       provider: 'quickbooks',
       realmId,
     });
