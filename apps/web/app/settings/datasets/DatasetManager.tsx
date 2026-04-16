@@ -201,7 +201,7 @@ export default function DatasetManager() {
             </svg>
             <p className="text-sm font-medium text-foreground">No datasets yet</p>
             <p className="max-w-[280px] text-sm text-muted-foreground">
-              Upload a CSV and we'll organize it here so you can manage, rename, and switch between datasets.
+              Upload a CSV and we&apos;ll organize it here so you can manage, rename, and switch between datasets.
             </p>
             <a
               href="/upload"
