@@ -124,7 +124,7 @@ function EmptyState() {
       <EmptyStateIllustration />
       <p className="text-sm font-medium text-foreground">Your data is waiting</p>
       <p className="max-w-[260px] text-sm text-muted-foreground">
-        Drop a CSV and we'll turn it into charts and plain-English insights
+        Drop a CSV and we&apos;ll turn it into charts and plain-English insights
       </p>
       <Link
         href="/upload"
