@@ -51,6 +51,10 @@ export const ANALYTICS_EVENTS = {
   TRANSPARENCY_PANEL_OPENED: 'transparency_panel.opened',
   DATASET_RENAMED: 'dataset.renamed',
   DATASET_ACTIVATED: 'dataset.activated',
+  INTEGRATION_CONNECTED: 'integration.connected',
+  INTEGRATION_DISCONNECTED: 'integration.disconnected',
+  INTEGRATION_SYNCED: 'integration.synced',
+  INTEGRATION_SYNC_FAILED: 'integration.sync_failed',
 } as const;
 
 export type AnalyticsEventName =

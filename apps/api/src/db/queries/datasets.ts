@@ -38,7 +38,12 @@ export async function persistUpload(
 
 export async function createDataset(
   orgId: number,
-  data: { name: string; sourceType?: 'csv'; isSeedData?: boolean; uploadedBy?: number | null },
+  data: {
+    name: string;
+    sourceType?: 'csv' | 'quickbooks' | 'xero' | 'stripe' | 'plaid';
+    isSeedData?: boolean;
+    uploadedBy?: number | null;
+  },
   client: typeof db | DbTransaction = db,
 ) {
   const [dataset] = await client
