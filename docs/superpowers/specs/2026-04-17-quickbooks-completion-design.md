@@ -227,9 +227,61 @@ Steps for pre-launch manual validation against a real Intuit sandbox:
 9. Run Playwright E2E suite against staging URL
 10. Check Sentry — sync events appear with `environment: 'staging'`
 
-### CI Pipeline Addition
-- `deploy:staging` step after tests pass, triggers on every push to `main`
-- Production deploys are manual promotion only
+### CI Pipeline Changes
+
+The existing pipeline (`.github/workflows/ci.yml`) has 6 stages:
+1. `quality` — lint + type-check
+2. `test-shared-web` — shared + web unit tests
+3. `test-api` — API Vitest tests (continue-on-error, memory constrained)
+4. `seed-validation` — curation pipeline snapshot validation
+5. `e2e` — Playwright tests against Docker Compose stack
+6. `docker-smoke` — Docker smoke test
+
+**What changes:**
+
+**Stage 3 (`test-api`)** — no config change. The ~35 new mocked QB integration tests are standard Vitest files in `apps/api/`. They run automatically in the existing `npx vitest run` command. The `NODE_OPTIONS=--max-old-space-size=4096` already handles memory. The `continue-on-error: true` flag stays until the runner memory issue is resolved.
+
+**Stage 5 (`e2e`)** — no config change. The 25 new QB Playwright tests go in `apps/web/e2e/quickbooks.spec.ts`. The existing step runs `npx playwright test` which picks up all `*.spec.ts` files. Docker Compose starts the full stack (web + api + db + redis), so the QB routes are available. The mocked API responses via `page.route()` intercept before the real API, so no QB credentials needed in `.env.ci`.
+
+**New file: `.env.ci` additions:**
+```
+# QuickBooks — not configured in CI, API boots without it (guarded by isQbConfigured)
+# No QUICKBOOKS_* vars needed
+```
+No changes to `.env.ci` — the QB env vars are already optional in `config.ts`. The API boots fine without them. The Playwright tests mock all QB endpoints client-side.
+
+**New workflow: `deploy-staging.yml` (separate file):**
+```yaml
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Staging
+    needs: []  # runs independently of CI
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - name: Deploy to Vercel (staging)
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+```
+Staging deploys on every push to `main`. Production promotion is manual via `vercel promote` or the Vercel dashboard.
+
+**No changes needed to:**
+- Stage 1 (`quality`) — lint/type-check picks up new files automatically
+- Stage 2 (`test-shared-web`) — QB tests are in API and e2e, not shared/web
+- Stage 4 (`seed-validation`) — QB doesn't affect seed data
+- Stage 6 (`docker-smoke`) — existing smoke test covers API health, which includes the QB-guarded startup path
+
+**Playwright config addition:**
+If `playwright.config.ts` doesn't already include `apps/web/e2e/` as a test directory, add it. Otherwise no change — the existing `npx playwright test` command discovers spec files automatically.
 
 ### Intuit App Review
 
