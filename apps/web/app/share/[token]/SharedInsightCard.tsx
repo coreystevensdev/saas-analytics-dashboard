@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AI_DISCLAIMER } from 'shared/constants';
 
 interface SharedInsightCardProps {
   orgName: string;
@@ -34,6 +35,7 @@ export default function SharedInsightCard({
         </header>
 
         <SummaryText text={aiSummaryContent} />
+        <p className="mt-6 text-[11px] leading-tight text-muted-foreground/60">{AI_DISCLAIMER}</p>
       </div>
 
       <div className="mt-6 flex justify-center">
