@@ -8,7 +8,7 @@ import { trackClientEvent } from '@/lib/analytics';
 import { UpgradeCta } from '@/components/common/UpgradeCta';
 import { AiSummarySkeleton } from './AiSummarySkeleton';
 import { ShareMenu, type ShareStatus, type LinkStatus } from './ShareMenu';
-import { FREE_PREVIEW_WORD_LIMIT, ANALYTICS_EVENTS } from 'shared/constants';
+import { FREE_PREVIEW_WORD_LIMIT, ANALYTICS_EVENTS, AI_DISCLAIMER } from 'shared/constants';
 
 import type { SubscriptionTier, TransparencyMetadata } from 'shared/types';
 
@@ -132,48 +132,51 @@ function PostCompletionFooter({
   pdfStatus,
 }: PostCompletionFooterProps) {
   return (
-    <div className="mt-4 flex items-center gap-3 border-t border-border pt-4 animate-fade-in">
-      <button
-        type="button"
-        className="min-h-11 text-xs text-muted-foreground underline-offset-2 hover:underline"
-        onClick={onToggleTransparency}
-        aria-expanded={transparencyOpen}
-        disabled={!onToggleTransparency}
-      >
-        How I reached this conclusion
-        <span
-          className={cn(
-            'ml-1 inline-block transition-transform duration-150',
-            transparencyOpen && 'rotate-180',
-          )}
-          aria-hidden="true"
+    <div className="mt-4 border-t border-border pt-4 animate-fade-in">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className="min-h-11 text-xs text-muted-foreground underline-offset-2 hover:underline"
+          onClick={onToggleTransparency}
+          aria-expanded={transparencyOpen}
+          disabled={!onToggleTransparency}
         >
-          ▾
-        </span>
-      </button>
-      <div className="ml-auto">
-        {onShare && onShareDownload && onShareCopy ? (
-          <ShareMenu
-            status={shareState}
-            onGenerate={onShare}
-            onDownload={onShareDownload}
-            onCopy={onShareCopy}
-            onCopyLink={onShareCopyLink}
-            linkStatus={shareLinkStatus}
-            linkClipboardFailed={shareLinkClipboardFailed}
-            onExportPdf={onExportPdf}
-            pdfStatus={pdfStatus}
-          />
-        ) : (
-          <button
-            type="button"
-            className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-            disabled
+          How I reached this conclusion
+          <span
+            className={cn(
+              'ml-1 inline-block transition-transform duration-150',
+              transparencyOpen && 'rotate-180',
+            )}
+            aria-hidden="true"
           >
-            Share
-          </button>
-        )}
+            ▾
+          </span>
+        </button>
+        <div className="ml-auto">
+          {onShare && onShareDownload && onShareCopy ? (
+            <ShareMenu
+              status={shareState}
+              onGenerate={onShare}
+              onDownload={onShareDownload}
+              onCopy={onShareCopy}
+              onCopyLink={onShareCopyLink}
+              linkStatus={shareLinkStatus}
+              linkClipboardFailed={shareLinkClipboardFailed}
+              onExportPdf={onExportPdf}
+              pdfStatus={pdfStatus}
+            />
+          ) : (
+            <button
+              type="button"
+              className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              disabled
+            >
+              Share
+            </button>
+          )}
+        </div>
       </div>
+      <p className="mt-3 text-[11px] leading-tight text-muted-foreground/60">{AI_DISCLAIMER}</p>
     </div>
   );
 }

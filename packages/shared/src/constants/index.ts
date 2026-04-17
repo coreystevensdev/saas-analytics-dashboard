@@ -101,6 +101,9 @@ export const CHART_CONFIG = {
   SKELETON_FADE_MS: 150,
 } as const;
 
+export const AI_DISCLAIMER =
+  'AI-generated analysis — not financial advice. Verify with your accountant.' as const;
+
 export const DEMO_MODE_STATES = {
   SEED_ONLY: 'seed_only',
   SEED_PLUS_USER: 'seed_plus_user',
