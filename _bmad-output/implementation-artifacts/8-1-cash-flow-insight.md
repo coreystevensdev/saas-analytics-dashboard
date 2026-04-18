@@ -1,6 +1,6 @@
 # Story 8.1: Cash Flow Insight — Trailing Burn/Surplus Stat Type
 
-Status: review
+Status: done
 
 <!-- Note: Validation is REQUIRED. Every story must complete all 4 steps: Create → Validate → Dev → Code Review. -->
 <!-- Post-MVP story. Epic 8 opened 2026-04-18 for post-MVP extensions to the curation pipeline and delivery layer. -->
@@ -32,7 +32,7 @@ The Weekly Email Digest (GTM Week 3) will consume this stat as one of its three 
 
 4. **Zero-revenue month in the window suppresses the insight** — Given any month in the window has `revenue === 0`, when the stat is computed, then `computeCashFlow` returns `[]`. Rationale: a revenue gap is a data gap, not a real burn signal (business closure, missing upload, seasonal closure — never something the AI should editorialize on).
 
-5. **Scoring reflects urgency when burning, without inverting the margin/cash-flow relationship** — Given a stat with `direction === 'burning'` and `monthsBurning >= 2`, when `scoreInsights()` runs, then `actionabilityScore` returns `0.9` (tying `MarginTrend` when shrinking), `noveltyScore` returns `≥ 0.7`, and `specificityScore` returns `0.85` (matching `SeasonalProjection` for stats that carry exact month labels and amounts). Rationale: margin compression is the leading signal, cash burn is the trailing consequence — scoring them equal rather than elevating cash flow above margin prevents an unacknowledged reordering that would resurface in code review. Surplus direction scores moderate (not urgent but still useful context).
+5. **Scoring reflects urgency when burning, at exact parity with MarginTrend shrinking** — Given a stat with `direction === 'burning'` and `monthsBurning >= 2`, when `scoreInsights()` runs, then all three score components match `MarginTrend shrinking` exactly: `actionabilityScore === 0.9`, `noveltyScore === 0.80`, `specificityScore === 0.80`. Under the default weight config (novelty 0.35, actionability 0.40, specificity 0.25), both CashFlow burning and MarginTrend shrinking total `0.840` — strict tie. Rationale: margin compression is the leading signal, cash burn is the trailing consequence. Equal scoring prevents an unacknowledged inversion in the ranked top-N. Surplus direction scores moderate (not urgent but still useful context); single-month burning scores below sustained burning.
 
 6. **Assembly renders the stat into the LLM prompt** — Given a `CashFlowStat` passes into `assembly.ts`, when `formatStat()` renders it, then output is one line containing signed `monthlyNet`, window size, direction, `monthsBurning`, and the relevance score — matching the existing format convention of other stat types.
 
@@ -74,9 +74,9 @@ The Weekly Email Digest (GTM Week 3) will consume this stat as one of its three 
 
 - [x] Task 2: Wire scoring (AC: #5)
   - [x] 2.1 Open `apps/api/src/services/curation/scoring.ts`
-  - [x] 2.2 Add a `case StatType.CashFlow` to `noveltyScore`: return `0.85` when `direction === 'burning'` and `monthsBurning >= 2`; `0.7` when `'burning'` and `monthsBurning === 1`; `0.5` when `'surplus'`. (Break-even never reaches this layer — suppressed in computation.)
+  - [x] 2.2 Add a `case StatType.CashFlow` to `noveltyScore`: return `0.80` when `direction === 'burning'` and `monthsBurning >= 2` (matches `MarginTrend` not-stable); `0.7` when `'burning'` and `monthsBurning === 1`; `0.5` when `'surplus'`. (Break-even never reaches this layer — suppressed in computation.)
   - [x] 2.3 Add a `case StatType.CashFlow` to `actionabilityScore`: return `0.9` when `'burning'` and `monthsBurning >= 2` (ties `MarginTrend shrinking` at `scoring.ts:79`); `0.75` when `'burning'` with `monthsBurning === 1`; `0.5` when `'surplus'`. See AC #5 rationale — preserves leading/trailing signal relationship with `MarginTrend`.
-  - [x] 2.4 Add a `case StatType.CashFlow` to `specificityScore`: return `0.85` (always). Matches `SeasonalProjection` at `scoring.ts:97` — both stat types carry exact named months and amounts, so the specificity parity is intentional. `MarginTrend` stays at `0.8` because it is window-level, not month-level.
+  - [x] 2.4 Add a `case StatType.CashFlow` to `specificityScore`: return `0.80` (flat). Matches `MarginTrend` at `scoring.ts:102` — pairing the specificity tier with the novelty tier guarantees exact score parity under default weights. `SeasonalProjection` stays at `0.85` because forward projection is a distinct kind of specificity.
 
 - [x] Task 3: Wire assembly / prompt formatting (AC: #6)
   - [x] 3.1 Open `apps/api/src/services/curation/assembly.ts`
@@ -315,3 +315,4 @@ None. Test suite went from 619 → 633 tests over three iterations, all green on
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-18 | 1.0 | Initial implementation — 7 tasks, 16 new tests, 3 commits | Claude Opus 4.7 via dev-story |
+| 2026-04-18 | 1.1 | Code review findings applied: scoring parity fix (CashFlow novelty 0.85 → 0.80 and specificity 0.85 → 0.80 to produce strict tie with MarginTrend shrinking under default weights, not a 0.03 inversion), TransparencyPanel labels for `year_over_year`/`margin_trend`/`seasonal_projection` added (pre-existing gap surfaced by review), zeroAvgRevenue test fixture annotated with intent. Scoring test tolerance tightened from `< 0.05` to `toBeCloseTo(..., 6)` so a future regression fails loud. | Claude Opus 4.7 via code-review fixes |
