@@ -45,3 +45,13 @@ export class ExternalServiceError extends AppError {
     super(`External service error: ${service}`, 'EXTERNAL_SERVICE_ERROR', 502, details);
   }
 }
+
+// For invariants the server should uphold — not user-facing auth failures.
+// Use this when the cause is misconfigured code (missing middleware, unreachable
+// branch) rather than a bad request. Surfaces as 500 so it shows up in error
+// dashboards as a real bug instead of blending into user auth noise.
+export class ProgrammerError extends AppError {
+  constructor(message: string) {
+    super(message, 'INTERNAL_SERVER_ERROR', 500);
+  }
+}
