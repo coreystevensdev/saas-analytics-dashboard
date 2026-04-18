@@ -9,6 +9,7 @@ export const StatType = {
   YearOverYear: 'year_over_year',
   MarginTrend: 'margin_trend',
   SeasonalProjection: 'seasonal_projection',
+  CashFlow: 'cash_flow',
 } as const;
 
 export type StatType = (typeof StatType)[keyof typeof StatType];
@@ -74,6 +75,16 @@ export interface SeasonalProjectionDetails {
   confidence: 'high' | 'moderate' | 'low';
 }
 
+// Net cash flow over a trailing window. Negative = burning, positive = surplus.
+// MonthlyNet is signed — the prompt layer interprets direction for the owner.
+export interface CashFlowDetails {
+  monthlyNet: number;
+  trailingMonths: number;
+  direction: 'burning' | 'surplus' | 'break_even';
+  monthsBurning: number;
+  recentMonths: { month: string; revenue: number; expenses: number; net: number }[];
+}
+
 interface BaseComputedStat {
   category: string | null;
   value: number;
@@ -120,6 +131,11 @@ export interface SeasonalProjectionStat extends BaseComputedStat {
   details: SeasonalProjectionDetails;
 }
 
+export interface CashFlowStat extends BaseComputedStat {
+  statType: 'cash_flow';
+  details: CashFlowDetails;
+}
+
 export type ComputedStat =
   | TotalStat
   | AverageStat
@@ -128,7 +144,8 @@ export type ComputedStat =
   | CategoryBreakdownStat
   | YearOverYearStat
   | MarginTrendStat
-  | SeasonalProjectionStat;
+  | SeasonalProjectionStat
+  | CashFlowStat;
 
 export interface ScoredInsight {
   stat: ComputedStat;
