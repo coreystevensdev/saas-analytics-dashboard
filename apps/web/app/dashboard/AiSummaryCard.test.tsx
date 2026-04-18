@@ -433,6 +433,71 @@ describe('AiSummaryCard', () => {
     const btn = screen.getByText(/How I reached this conclusion/);
     expect((btn as HTMLButtonElement).disabled).toBe(true);
   });
+
+  describe('stale banner', () => {
+    it('does not render banner when cachedStaleAt is null', () => {
+      mockUseAiStream.mockReturnValue(defaultHookReturn());
+
+      render(<AiSummaryCard datasetId={42} cachedContent="Prior summary" cachedStaleAt={null} />);
+
+      expect(screen.queryByText('Your data has been updated')).toBeNull();
+      expect(screen.getByText('Prior summary')).toBeTruthy();
+    });
+
+    it('renders banner with Refresh button when cachedStaleAt is in the past', () => {
+      mockUseAiStream.mockReturnValue(defaultHookReturn());
+      const past = new Date(Date.now() - 60_000).toISOString();
+
+      render(
+        <AiSummaryCard datasetId={42} cachedContent="Prior summary" cachedStaleAt={past} />,
+      );
+
+      expect(screen.getByText('Your data has been updated')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /refresh insights/i })).toBeTruthy();
+    });
+
+    it('does not render banner when cachedStaleAt is in the future', () => {
+      mockUseAiStream.mockReturnValue(defaultHookReturn());
+      const future = new Date(Date.now() + 60_000).toISOString();
+
+      render(
+        <AiSummaryCard datasetId={42} cachedContent="Prior summary" cachedStaleAt={future} />,
+      );
+
+      expect(screen.queryByText('Your data has been updated')).toBeNull();
+    });
+
+    it('clicking Refresh triggers streaming path by dropping cached content', () => {
+      mockUseAiStream.mockReturnValue(defaultHookReturn({ status: 'connecting' }));
+      const past = new Date(Date.now() - 60_000).toISOString();
+
+      render(
+        <AiSummaryCard datasetId={42} cachedContent="Prior summary" cachedStaleAt={past} />,
+      );
+
+      // before click — cached content shown, stream hook called with null
+      expect(screen.getByText('Prior summary')).toBeTruthy();
+      expect(mockUseAiStream).toHaveBeenLastCalledWith(null);
+
+      fireEvent.click(screen.getByRole('button', { name: /refresh insights/i }));
+
+      // after click — skeleton renders, hook called with the real datasetId
+      expect(mockUseAiStream).toHaveBeenLastCalledWith(42);
+      expect(screen.queryByText('Your data has been updated')).toBeNull();
+    });
+
+    it('Refresh button is disabled when datasetId is null', () => {
+      mockUseAiStream.mockReturnValue(defaultHookReturn());
+      const past = new Date(Date.now() - 60_000).toISOString();
+
+      render(
+        <AiSummaryCard datasetId={null} cachedContent="Prior summary" cachedStaleAt={past} />,
+      );
+
+      const btn = screen.getByRole('button', { name: /refresh insights/i }) as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+    });
+  });
 });
 
 describe('truncateAtWordBoundary', () => {

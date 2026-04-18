@@ -14,6 +14,7 @@ vi.mock('../services/auth/tokenService.js', () => ({
 
 const mockGetDatasetsByOrg = vi.fn();
 const mockGetCachedSummary = vi.fn();
+const mockGetLatestSummary = vi.fn();
 const mockGetActiveDatasetId = vi.fn();
 const mockGetRowCount = vi.fn();
 
@@ -21,7 +22,7 @@ vi.mock('../db/queries/index.js', () => ({
   chartsQueries: { getChartData: mockGetChartData },
   datasetsQueries: { getUserOrgDemoState: mockGetUserOrgDemoState, getDatasetsByOrg: mockGetDatasetsByOrg },
   orgsQueries: { getSeedOrgId: mockGetSeedOrgId, findOrgById: mockFindOrgById, getActiveDatasetId: mockGetActiveDatasetId },
-  aiSummariesQueries: { getCachedSummary: mockGetCachedSummary },
+  aiSummariesQueries: { getCachedSummary: mockGetCachedSummary, getLatestSummary: mockGetLatestSummary },
   dataRowsQueries: { getRowCount: mockGetRowCount },
 }));
 
@@ -100,6 +101,7 @@ beforeEach(() => {
   mockGetSeedOrgId.mockResolvedValue(99);
   mockGetDatasetsByOrg.mockResolvedValue([{ id: 1 }]);
   mockGetCachedSummary.mockResolvedValue(null);
+  mockGetLatestSummary.mockResolvedValue(null);
   mockGetActiveDatasetId.mockResolvedValue(null);
   mockGetRowCount.mockResolvedValue(144);
   // withRlsContext executes the callback with a mock tx — query mocks intercept regardless
@@ -326,19 +328,39 @@ describe('dataset query param', () => {
 });
 
 describe('GET /ai-summaries/:datasetId/cached', () => {
-  it('returns cached summary for valid datasetId', async () => {
-    mockGetCachedSummary.mockResolvedValueOnce({ content: 'Revenue grew 12% month over month.' });
+  it('returns latest summary for valid datasetId with staleAt=null when fresh', async () => {
+    mockGetLatestSummary.mockResolvedValueOnce({
+      content: 'Revenue grew 12% month over month.',
+      transparencyMetadata: null,
+      staleAt: null,
+    });
 
     const res = await fetch(`${baseUrl}/ai-summaries/1/cached`);
-    const body = await res.json() as { data: { content: string } };
+    const body = await res.json() as { data: { content: string; staleAt: string | null } };
 
     expect(res.status).toBe(200);
     expect(body.data.content).toBe('Revenue grew 12% month over month.');
-    expect(mockGetCachedSummary).toHaveBeenCalledWith(99, 1, expect.anything());
+    expect(body.data.staleAt).toBeNull();
+    expect(mockGetLatestSummary).toHaveBeenCalledWith(99, 1, expect.anything());
   });
 
-  it('returns 404 when no cached summary exists', async () => {
-    mockGetCachedSummary.mockResolvedValueOnce(null);
+  it('surfaces staleAt ISO string when the summary is stale', async () => {
+    const staleAt = new Date('2026-04-17T10:00:00.000Z');
+    mockGetLatestSummary.mockResolvedValueOnce({
+      content: 'Prior analysis.',
+      transparencyMetadata: null,
+      staleAt,
+    });
+
+    const res = await fetch(`${baseUrl}/ai-summaries/1/cached`);
+    const body = await res.json() as { data: { staleAt: string } };
+
+    expect(res.status).toBe(200);
+    expect(body.data.staleAt).toBe('2026-04-17T10:00:00.000Z');
+  });
+
+  it('returns 404 when no summary exists for the dataset', async () => {
+    mockGetLatestSummary.mockResolvedValueOnce(null);
 
     const res = await fetch(`${baseUrl}/ai-summaries/1/cached`);
     const body = await res.json() as { error: { code: string } };

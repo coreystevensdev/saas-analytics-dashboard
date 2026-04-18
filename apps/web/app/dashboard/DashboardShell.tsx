@@ -1,7 +1,7 @@
 'use client';
 
 import { Component, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { Filter } from 'lucide-react';
@@ -40,6 +40,7 @@ interface DashboardShellProps {
   initialData: ChartData;
   cachedSummary?: string;
   cachedMetadata?: TransparencyMetadata | null;
+  cachedStaleAt?: string | null;
   tier?: SubscriptionTier;
   needsOnboarding?: boolean;
 }
@@ -155,8 +156,9 @@ function FilteredEmptyState({ onReset }: { onReset: () => void }) {
   );
 }
 
-export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tier: serverTier, needsOnboarding }: DashboardShellProps) {
+export function DashboardShell({ initialData, cachedSummary, cachedMetadata, cachedStaleAt, tier: serverTier, needsOnboarding }: DashboardShellProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showOnboarding, setShowOnboarding] = useState(needsOnboarding ?? false);
   const { setOrgName } = useSidebar();
   const isMobile = useIsMobile();
@@ -170,6 +172,30 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tie
     }
     prevTierRef.current = tier;
   }, [tier]);
+
+  const qbToastFiredRef = useRef(false);
+  useEffect(() => {
+    if (qbToastFiredRef.current) return;
+    const qb = searchParams.get('qb');
+    if (!qb) return;
+
+    qbToastFiredRef.current = true;
+    if (qb === 'connected') {
+      toast.success('QuickBooks connected', {
+        description: 'We\u2019re syncing your transactions now — insights will refresh shortly.',
+      });
+    } else if (qb === 'denied') {
+      toast.info('QuickBooks connection cancelled', {
+        description: 'No data was imported. You can try again from Settings > Integrations.',
+      });
+    } else if (qb === 'error') {
+      toast.error('QuickBooks connection failed', {
+        description: 'Please try again, or contact support if the issue continues.',
+      });
+    }
+
+    router.replace('/dashboard', { scroll: false });
+  }, [searchParams, router]);
 
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [transparencyOpen, setTransparencyOpen] = useState(false);
@@ -250,6 +276,7 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, tie
       datasetId={data.datasetId}
       cachedContent={cachedSummary}
       cachedMetadata={cachedMetadata}
+      cachedStaleAt={cachedStaleAt}
       tier={tier}
       onToggleTransparency={handleToggleTransparency}
       transparencyOpen={transparencyOpen}

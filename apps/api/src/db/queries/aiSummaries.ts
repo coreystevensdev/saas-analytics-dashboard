@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 
 import { db, type DbTransaction } from '../../lib/db.js';
 import { aiSummaries } from '../schema.js';
@@ -14,6 +14,23 @@ export async function getCachedSummary(
       eq(aiSummaries.datasetId, datasetId),
       isNull(aiSummaries.staleAt),
     ),
+  });
+}
+
+/** Returns the most recent summary regardless of staleness.
+ *  Callers that need the staleness signal (e.g., the "data updated — refresh?"
+ *  banner) use this; the streaming cache-hit path keeps using getCachedSummary. */
+export async function getLatestSummary(
+  orgId: number,
+  datasetId: number,
+  client: typeof db | DbTransaction = db,
+) {
+  return client.query.aiSummaries.findFirst({
+    where: and(
+      eq(aiSummaries.orgId, orgId),
+      eq(aiSummaries.datasetId, datasetId),
+    ),
+    orderBy: [desc(aiSummaries.createdAt)],
   });
 }
 
