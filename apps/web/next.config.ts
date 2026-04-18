@@ -26,8 +26,12 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  // Upload source maps for readable stack traces in Sentry
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // upload _next/static chunks so framework frames resolve in stack traces
+  widenClientFileUpload: true,
+  // auto no-op when authToken is absent, so dev/PR builds stay silent
   silent: true,
-  // Disable the Sentry telemetry collection
   telemetry: false,
 });
