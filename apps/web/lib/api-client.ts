@@ -20,6 +20,17 @@ interface ApiError {
   };
 }
 
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | null,
+  ) {
+    super(message);
+    this.name = 'ApiClientError';
+  }
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 
 async function attemptRefresh(): Promise<boolean> {
@@ -66,13 +77,15 @@ export async function apiClient<T>(
 
   if (!response.ok) {
     let msg = `API error: ${response.status}`;
+    let code: string | null = null;
     try {
       const errorBody = (await response.json()) as ApiError;
       if (errorBody.error?.message) msg = errorBody.error.message;
+      if (errorBody.error?.code) code = errorBody.error.code;
     } catch {
       // non-JSON response from proxy errors, gateway timeouts
     }
-    throw new Error(msg);
+    throw new ApiClientError(msg, response.status, code);
   }
 
   return response.json() as Promise<ApiResponse<T>>;

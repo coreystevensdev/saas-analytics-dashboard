@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Link2, Link2Off, Loader2 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { apiClient, ApiClientError } from '@/lib/api-client';
 
 interface QbStatus {
   connected: boolean;
@@ -12,7 +13,7 @@ interface QbStatus {
   lastSyncedAt?: string;
 }
 
-type View = 'loading' | 'disconnected' | 'connected' | 'unavailable';
+type View = 'loading' | 'disconnected' | 'connected' | 'unavailable' | 'error';
 
 export function QuickBooksCard() {
   const [view, setView] = useState<View>('loading');
@@ -27,11 +28,16 @@ export function QuickBooksCard() {
         if (cancelled) return;
         setStatus(res.data);
         setView(res.data.connected ? 'connected' : 'disconnected');
-      } catch {
-        // 501 INTEGRATION_NOT_CONFIGURED or any fetch failure — hide the card entirely.
-        // Keeps a broken backend from clutter-ing the CSV-first experience.
+      } catch (err) {
         if (cancelled) return;
-        setView('unavailable');
+        // 501 means the backend has no QB env vars configured — hide the card
+        // so a demo without Intuit credentials stays clean. Other errors
+        // (network drop, 500) surface a retry affordance instead of disappearing.
+        if (err instanceof ApiClientError && err.status === 501) {
+          setView('unavailable');
+        } else {
+          setView('error');
+        }
       }
     })();
     return () => {
@@ -46,12 +52,45 @@ export function QuickBooksCard() {
         method: 'POST',
       });
       window.location.href = res.data.authUrl;
-    } catch {
+    } catch (err) {
       setConnecting(false);
+      if (err instanceof ApiClientError && err.code === 'ALREADY_CONNECTED') {
+        toast.info('QuickBooks is already connected', {
+          description: 'Refresh the page to see the current connection.',
+        });
+      } else {
+        toast.error('Couldn\u2019t start QuickBooks connection', {
+          description: 'Please try again, or retry from Settings > Integrations.',
+        });
+      }
     }
   }, []);
 
   if (view === 'unavailable') return null;
+
+  if (view === 'error') {
+    return (
+      <section
+        aria-label="QuickBooks integration unavailable"
+        className="flex min-h-[240px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card p-6 text-center"
+      >
+        <p className="text-sm font-medium text-foreground">QuickBooks is temporarily unavailable</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          We couldn&apos;t reach the integration service.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setView('loading');
+            location.reload();
+          }}
+          className="mt-4 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+        >
+          Retry
+        </button>
+      </section>
+    );
+  }
 
   if (view === 'loading') {
     return (

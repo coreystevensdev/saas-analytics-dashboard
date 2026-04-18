@@ -2,10 +2,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockApiClient = vi.fn();
+const { mockApiClient, mockToast, ApiClientError } = vi.hoisted(() => {
+  class ApiClientError extends Error {
+    constructor(message: string, readonly status: number, readonly code: string | null) {
+      super(message);
+      this.name = 'ApiClientError';
+    }
+  }
+  return {
+    mockApiClient: vi.fn(),
+    mockToast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
+    ApiClientError,
+  };
+});
+
 vi.mock('@/lib/api-client', () => ({
   apiClient: (...args: unknown[]) => mockApiClient(...args),
+  ApiClientError,
 }));
+
+vi.mock('sonner', () => ({ toast: mockToast }));
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -55,13 +71,36 @@ describe('QuickBooksCard', () => {
     );
   });
 
-  it('renders nothing when status endpoint throws (QB not configured)', async () => {
-    mockApiClient.mockRejectedValueOnce(new Error('QuickBooks integration is not configured'));
+  it('renders nothing when status endpoint returns 501 (QB not configured)', async () => {
+    mockApiClient.mockRejectedValueOnce(
+      new ApiClientError('QuickBooks integration is not configured', 501, 'INTEGRATION_NOT_CONFIGURED'),
+    );
 
     const { container } = render(<QuickBooksCard />);
 
     await waitFor(() => {
       expect(container).toBeEmptyDOMElement();
+    });
+  });
+
+  it('renders a retry view when status endpoint fails with non-501 error', async () => {
+    mockApiClient.mockRejectedValueOnce(new ApiClientError('Internal server error', 500, null));
+
+    render(<QuickBooksCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('QuickBooks is temporarily unavailable')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it('renders retry view on network error (non-ApiClientError)', async () => {
+    mockApiClient.mockRejectedValueOnce(new TypeError('NetworkError: Failed to fetch'));
+
+    render(<QuickBooksCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('QuickBooks is temporarily unavailable')).toBeInTheDocument();
     });
   });
 
@@ -98,10 +137,10 @@ describe('QuickBooksCard', () => {
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 
-  it('re-enables Connect button when connect endpoint fails', async () => {
+  it('re-enables Connect button and fires error toast when connect endpoint fails', async () => {
     mockApiClient
       .mockResolvedValueOnce({ data: { connected: false } })
-      .mockRejectedValueOnce(new Error('Network error'));
+      .mockRejectedValueOnce(new ApiClientError('Internal error', 500, null));
 
     render(<QuickBooksCard />);
 
@@ -112,6 +151,29 @@ describe('QuickBooksCard', () => {
       expect(button).not.toBeDisabled();
     });
     expect(button).toHaveTextContent(/connect quickbooks/i);
+    expect(mockToast.error).toHaveBeenCalledWith(
+      'Couldn\u2019t start QuickBooks connection',
+      expect.any(Object),
+    );
+  });
+
+  it('fires info toast on ALREADY_CONNECTED race', async () => {
+    mockApiClient
+      .mockResolvedValueOnce({ data: { connected: false } })
+      .mockRejectedValueOnce(new ApiClientError('Already connected', 409, 'ALREADY_CONNECTED'));
+
+    render(<QuickBooksCard />);
+
+    const button = await screen.findByRole('button', { name: /connect quickbooks/i });
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(mockToast.info).toHaveBeenCalledWith(
+        'QuickBooks is already connected',
+        expect.any(Object),
+      );
+    });
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 
   it('omits Last synced row when lastSyncedAt is missing', async () => {
