@@ -272,9 +272,17 @@ export function AiSummaryCard({
   className,
 }: AiSummaryCardProps) {
   const [refreshing, setRefreshing] = useState(false);
-  // Snapshot staleness at mount — cachedStaleAt is a server-rendered prop, so a
-  // per-render Date.now() would violate the "pure render" rule without changing
-  // behavior. Re-mounts on navigation pick up a fresh value from the server.
+  // Snapshot staleness at mount via lazy init.
+  //
+  // Why: cachedStaleAt is a server-rendered prop and Date.now() in render
+  // violates React's "pure render" rule. useState's initializer runs once per
+  // mount, so the snapshot is consistent across re-renders of this instance.
+  //
+  // Tradeoff: if a background QB sync marks the summary stale while the user
+  // is sitting on the dashboard, the banner won't appear until the next nav.
+  // Acceptable for MVP — the sync takes minutes, and the user will reload
+  // eventually. If real-time staleness becomes important, either re-derive on
+  // cachedStaleAt changes or subscribe to a WebSocket event.
   const [isStale] = useState(
     () => !!(cachedStaleAt && new Date(cachedStaleAt).getTime() < Date.now()),
   );

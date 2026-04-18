@@ -1,7 +1,7 @@
 'use client';
 
-import { Component, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Component, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { Filter } from 'lucide-react';
@@ -35,6 +35,7 @@ import { useExportPdf } from '@/lib/hooks/useExportPdf';
 import { KpiCards } from './KpiCards';
 import { OnboardingModal } from './OnboardingModal';
 import { DatasetChip } from '@/components/datasets/DatasetChip';
+import { QbReturnToast } from './QbReturnToast';
 
 interface DashboardShellProps {
   initialData: ChartData;
@@ -158,7 +159,6 @@ function FilteredEmptyState({ onReset }: { onReset: () => void }) {
 
 export function DashboardShell({ initialData, cachedSummary, cachedMetadata, cachedStaleAt, tier: serverTier, needsOnboarding }: DashboardShellProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [showOnboarding, setShowOnboarding] = useState(needsOnboarding ?? false);
   const { setOrgName } = useSidebar();
   const isMobile = useIsMobile();
@@ -172,30 +172,6 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, cac
     }
     prevTierRef.current = tier;
   }, [tier]);
-
-  const qbToastFiredRef = useRef(false);
-  useEffect(() => {
-    if (qbToastFiredRef.current) return;
-    const qb = searchParams.get('qb');
-    if (!qb) return;
-
-    qbToastFiredRef.current = true;
-    if (qb === 'connected') {
-      toast.success('QuickBooks connected', {
-        description: 'We\u2019re syncing your transactions now — this can take a few minutes.',
-      });
-    } else if (qb === 'denied') {
-      toast.info('QuickBooks connection cancelled', {
-        description: 'Nothing was saved. You can connect anytime from Settings > Integrations.',
-      });
-    } else if (qb === 'error') {
-      toast.error('QuickBooks connection failed', {
-        description: 'Something went wrong on the way back from QuickBooks. Retry from Settings > Integrations — we haven\u2019t saved any of your data.',
-      });
-    }
-
-    router.replace('/dashboard', { scroll: false });
-  }, [searchParams, router]);
 
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [transparencyOpen, setTransparencyOpen] = useState(false);
@@ -296,6 +272,11 @@ export function DashboardShell({ initialData, cachedSummary, cachedMetadata, cac
 
   return (
     <>
+      {/* useSearchParams is request-time data — keep it in a leaf under Suspense so
+          the rest of the shell stays statically renderable under Next.js 16. */}
+      <Suspense fallback={null}>
+        <QbReturnToast />
+      </Suspense>
       {showOnboarding && <OnboardingModal onComplete={() => setShowOnboarding(false)} />}
       <DemoModeBanner demoState={data.demoState} onUploadClick={handleUploadClick} />
 

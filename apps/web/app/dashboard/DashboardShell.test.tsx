@@ -61,8 +61,13 @@ vi.mock('./FilterBar', () => ({
 }));
 
 vi.mock('./AiSummaryCard', () => ({
-  AiSummaryCard: ({ datasetId, cachedContent, className }: { datasetId: number | null; cachedContent?: string; className?: string }) => (
-    <div data-testid="ai-summary-card" data-dataset-id={datasetId} className={className}>
+  AiSummaryCard: ({ datasetId, cachedContent, cachedStaleAt, className }: { datasetId: number | null; cachedContent?: string; cachedStaleAt?: string | null; className?: string }) => (
+    <div
+      data-testid="ai-summary-card"
+      data-dataset-id={datasetId}
+      data-cached-stale-at={cachedStaleAt ?? ''}
+      className={className}
+    >
       {cachedContent ?? 'AI Summary'}
     </div>
   ),
@@ -264,6 +269,33 @@ describe('DashboardShell', () => {
 
     expect(screen.getByTestId('skeleton-line')).toBeInTheDocument();
     expect(screen.getByTestId('skeleton-bar')).toBeInTheDocument();
+  });
+
+  it('passes cachedStaleAt through to AiSummaryCard', () => {
+    const staleAt = '2026-04-17T10:00:00.000Z';
+    render(
+      <DashboardShell
+        initialData={fullData}
+        cachedSummary="Prior summary"
+        cachedStaleAt={staleAt}
+      />,
+    );
+
+    const card = screen.getByTestId('ai-summary-card');
+    expect(card).toHaveAttribute('data-cached-stale-at', staleAt);
+  });
+
+  it('passes empty data-cached-stale-at when null', () => {
+    render(
+      <DashboardShell
+        initialData={fullData}
+        cachedSummary="Fresh summary"
+        cachedStaleAt={null}
+      />,
+    );
+
+    const card = screen.getByTestId('ai-summary-card');
+    expect(card).toHaveAttribute('data-cached-stale-at', '');
   });
 
   it('renders AiSummaryCard with datasetId', () => {
