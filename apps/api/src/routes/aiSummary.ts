@@ -19,6 +19,9 @@ import { aiSummaryTotal, aiTokensUsed } from '../lib/metrics.js';
 const aiSummaryRouter = Router();
 
 aiSummaryRouter.get('/:datasetId/latest', async (req, res: Response) => {
+  // Express types `req` as `Request<{ datasetId: string }>` — narrower than the
+  // base Request that AuthenticatedRequest extends, so TS requires `unknown` to
+  // bridge the two. authMiddleware guarantees `user` is populated upstream.
   const authedReq = req as unknown as AuthenticatedRequest;
   const orgId = authedReq.user.org_id;
   const rawId = Number(req.params.datasetId);
