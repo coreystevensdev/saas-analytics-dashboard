@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 
 const mockMutate = vi.fn();
 const mockPush = vi.fn();
+const mockReplace = vi.fn();
+let mockSearchParams = new URLSearchParams();
 let mockSwrReturn = {
   data: undefined as unknown,
   isLoading: false,
@@ -18,7 +20,8 @@ vi.mock('swr', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 vi.mock('@/lib/api-client', () => ({
@@ -105,7 +108,12 @@ vi.mock('@/lib/analytics', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { warning: vi.fn() },
+  toast: {
+    warning: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+  },
   Toaster: () => null,
 }));
 
@@ -184,6 +192,7 @@ afterEach(() => {
   shouldThrow = false;
   mockIsMobile = false;
   mockTier = 'free';
+  mockSearchParams = new URLSearchParams();
   mockSwrReturn = { data: undefined as unknown, isLoading: false, mutate: mockMutate };
 });
 
@@ -323,6 +332,51 @@ describe('DashboardShell', () => {
       rerender(<DashboardShell initialData={fullData} tier="pro" />);
 
       expect(toast.warning).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QuickBooks OAuth return', () => {
+    it('fires success toast and strips ?qb=connected', () => {
+      mockSearchParams = new URLSearchParams('qb=connected');
+      render(<DashboardShell initialData={fullData} />);
+
+      expect(toast.success).toHaveBeenCalledWith(
+        'QuickBooks connected',
+        expect.objectContaining({ description: expect.stringContaining('syncing') }),
+      );
+      expect(mockReplace).toHaveBeenCalledWith('/dashboard', { scroll: false });
+    });
+
+    it('fires info toast for ?qb=denied', () => {
+      mockSearchParams = new URLSearchParams('qb=denied');
+      render(<DashboardShell initialData={fullData} />);
+
+      expect(toast.info).toHaveBeenCalledWith(
+        'QuickBooks connection cancelled',
+        expect.any(Object),
+      );
+      expect(mockReplace).toHaveBeenCalledWith('/dashboard', { scroll: false });
+    });
+
+    it('fires error toast for ?qb=error', () => {
+      mockSearchParams = new URLSearchParams('qb=error');
+      render(<DashboardShell initialData={fullData} />);
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'QuickBooks connection failed',
+        expect.any(Object),
+      );
+      expect(mockReplace).toHaveBeenCalledWith('/dashboard', { scroll: false });
+    });
+
+    it('does not fire any toast when qb param is absent', () => {
+      mockSearchParams = new URLSearchParams();
+      render(<DashboardShell initialData={fullData} />);
+
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.info).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
     });
   });
 

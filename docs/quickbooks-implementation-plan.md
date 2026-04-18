@@ -31,19 +31,19 @@ The normalizer (QB transaction → `data_rows` shape) is pure logic with zero I/
 
 ## Story Overview
 
-| # | Story | Dependencies | New Files | Modified Files | Tests |
-|---|-------|-------------|-----------|----------------|-------|
-| QB-1 | Encryption service + config | None | 2 | 2 | ~10 |
-| QB-2 | Schema + migrations + queries + `source_id` column | QB-1 | 4 | 3 | ~12 |
-| QB-3 | OAuth flow (connect, callback, disconnect) | QB-2 | 3 | 3 | ~14 |
-| QB-4 | QB API client (HTTP, pagination, token refresh) | QB-3 | 2 | 0 | ~10 |
-| QB-5 | Transaction normalizer | None (pure logic) | 2 | 0 | ~14 |
-| QB-6 | Sync pipeline orchestrator | QB-4, QB-5 | 2 | 1 | ~12 |
-| QB-7 | BullMQ worker + scheduler | QB-6 | 2 | 2 | ~10 |
-| QB-8 | Upload page dual onboarding + QB card | QB-3 (API) | 2 | 2 | ~6 |
-| QB-9 | Settings > Integrations + stale nudge + analytics events | QB-3 (API) | 3 | 5 | ~14 |
+| # | Story | Dependencies | Status | Tests |
+|---|-------|-------------|--------|-------|
+| QB-1 | Encryption service + config | None | ✅ DONE | 10 |
+| QB-2 | Schema + migrations + queries + `source_id` column | QB-1 | ✅ DONE | 14 (9 connections + 5 sync jobs) |
+| QB-3 | OAuth flow (connect, callback, disconnect) | QB-2 | ✅ DONE | (covered in routes/integrations.test.ts) |
+| QB-4 | QB API client (HTTP, pagination, token refresh) | QB-3 | ✅ DONE | 12 |
+| QB-5 | Transaction normalizer | None (pure logic) | ✅ DONE | 19 |
+| QB-6 | Sync pipeline orchestrator | QB-4, QB-5 | ✅ DONE | 18 |
+| QB-7 | BullMQ worker + scheduler | QB-6 | ✅ DONE | 16 (10 worker + 6 scheduler) |
+| QB-8 | Upload page dual onboarding + QB card | QB-3 (API) | ✅ DONE (2026-04-17) | 10 (6 card + 4 OAuth return toasts) |
+| QB-9 | Settings > Integrations + stale nudge + analytics events | QB-3 (API) | ✅ DONE (2026-04-17) | +6 (5 card + 1 route staleAt) |
 
-**Total: ~22 new files, ~13 modified files, ~102 tests**
+**Implementation total: 9 of 9 stories shipped. All backend + frontend slices complete.**
 
 ---
 
@@ -82,6 +82,8 @@ so that OAuth tokens are encrypted at rest and all QB config is fail-fast valida
 ---
 
 ## Story QB-2: Schema, Migrations, Queries, and `source_id` Column
+
+**Status: DONE** — migration `0016_add-integration-tables.sql`, query modules shipped, 14 tests passing.
 
 ### Story
 
@@ -184,6 +186,8 @@ so that OAuth tokens, sync history, and integration data rows can be persisted w
 
 ## Story QB-3: OAuth Flow (Connect, Callback, Disconnect)
 
+**Status: DONE** — `services/integrations/quickbooks/oauth.ts`, `routes/integrations.ts` shipped. Public callback router + protected routes both mounted.
+
 ### Story
 
 As an **org owner**,
@@ -275,6 +279,8 @@ so that TellSight can access my financial data without me exporting anything.
 
 ## Story QB-4: QB API Client (HTTP, Pagination, Token Refresh)
 
+**Status: DONE** — `services/integrations/quickbooks/api.ts` + `errors.ts`, 12 tests.
+
 ### Story
 
 As a **developer**,
@@ -342,6 +348,8 @@ so that the normalizer and sync pipeline have a reliable data source.
 ---
 
 ## Story QB-5: Transaction Normalizer
+
+**Status: DONE** — `services/integrations/quickbooks/normalize.ts`, 19 tests across 13 transaction types.
 
 ### Story
 
@@ -414,6 +422,8 @@ so that the sync pipeline can insert QB data alongside CSV data in a consistent 
 ---
 
 ## Story QB-6: Sync Pipeline Orchestrator
+
+**Status: DONE** — `services/integrations/quickbooks/sync.ts`, 18 tests.
 
 ### Story
 
@@ -492,6 +502,8 @@ so that the BullMQ worker (QB-7) can call a single `runSync()` function.
 
 ## Story QB-7: BullMQ Worker + Scheduler
 
+**Status: DONE** — `services/integrations/worker.ts` + `scheduler.ts`, BullMQ installed, 16 tests. Worker runs in-process with graceful shutdown wired into the existing SIGTERM chain.
+
 ### Story
 
 As a **developer**,
@@ -565,6 +577,8 @@ so that QB data stays fresh automatically and manual syncs are queued reliably.
 
 ## Story QB-8: Upload Page — Dual Onboarding Card
 
+**Status: DONE (2026-04-17)** — `components/integrations/QuickBooksCard.tsx` (4-state machine: loading / disconnected / connected / unavailable). `/upload` restructured as 2fr/1fr grid. OAuth return toasts live in `DashboardShell.tsx`. 10 new tests (6 for the card, 4 for dashboard toast handling).
+
 ### Story
 
 As a **user visiting the upload page**,
@@ -617,6 +631,8 @@ so that I can onboard with my existing accounting data in two clicks.
 ---
 
 ## Story QB-9: Settings > Integrations + Stale Nudge + Analytics Events
+
+**Status: DONE (2026-04-17)** — All tasks shipped. Task 5 (stale banner) implementation: new `getLatestSummary` backend query, `/ai-summaries/:datasetId/cached` route now surfaces `staleAt`, threaded through dashboard page + DashboardShell as `cachedStaleAt` prop. `AiSummaryCard` renders a `StaleBanner` when `cachedStaleAt` is in the past; clicking "Refresh insights" sets a local `refreshing` flag that flips `hasCached` to false, triggering the existing `useAiStream` regeneration path. 5 card tests + 1 route staleAt test added.
 
 ### Story
 
@@ -707,18 +723,20 @@ so that I can monitor sync health, trigger manual refreshes, disconnect, and ref
 ## Build Sequence
 
 ```
-QB-1 (Encryption + Config)  ✅ DONE
-  └─► QB-2 (Schema + Queries + source_id)
-       └─► QB-3 (OAuth Flow)
-            ├─► QB-4 (API Client)
-            │    └─► QB-6 (Sync Pipeline)
-            │         └─► QB-7 (BullMQ Worker + Scheduler)
-            ├─► QB-5 (Normalizer — pure logic, parallel-safe)
-            ├─► QB-8 (Upload Page QB Card)
-            └─► QB-9 (Settings + Stale Nudge + Analytics)
+QB-1 (Encryption + Config)               ✅ DONE
+  └─► QB-2 (Schema + Queries + source_id)    ✅ DONE
+       └─► QB-3 (OAuth Flow)                    ✅ DONE
+            ├─► QB-4 (API Client)                    ✅ DONE
+            │    └─► QB-6 (Sync Pipeline)                 ✅ DONE
+            │         └─► QB-7 (BullMQ Worker + Scheduler)    ✅ DONE
+            ├─► QB-5 (Normalizer — pure logic)         ✅ DONE
+            ├─► QB-8 (Upload Page QB Card)               ✅ DONE (2026-04-17)
+            └─► QB-9 (Settings + Stale Nudge + Analytics) ✅ DONE (2026-04-17)
 ```
 
-QB-5 (normalizer) has no I/O dependencies and can be built in parallel with QB-4. QB-8 and QB-9 can start once QB-3's API routes exist.
+**All 9 stories complete.** Remaining polish: address the pre-existing lint errors in `routes/integrations.test.ts` and `quickbooks/api.ts` (42 `no-explicit-any` findings that predate this frontend work).
+
+QB-5 (normalizer) had no I/O dependencies and was built in parallel with QB-4. QB-8 and QB-9 were the frontend bookends that consumed QB-3's API routes.
 
 ## Dependencies
 

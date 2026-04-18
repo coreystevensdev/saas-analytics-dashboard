@@ -139,14 +139,20 @@ dashboardRouter.get('/ai-summaries/:datasetId/cached', async (req: Request, res:
   }
 
   const seedOrgId = await orgsQueries.getSeedOrgId();
-  const cached = await aiSummariesQueries.getCachedSummary(seedOrgId, rawId, dbAdmin);
+  const latest = await aiSummariesQueries.getLatestSummary(seedOrgId, rawId, dbAdmin);
 
-  if (!cached) {
+  if (!latest) {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'No cached summary' } });
     return;
   }
 
-  res.json({ data: { content: cached.content, metadata: cached.transparencyMetadata ?? null } });
+  res.json({
+    data: {
+      content: latest.content,
+      metadata: latest.transparencyMetadata ?? null,
+      staleAt: latest.staleAt ? latest.staleAt.toISOString() : null,
+    },
+  });
 });
 
 export default dashboardRouter;

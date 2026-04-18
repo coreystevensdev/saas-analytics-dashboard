@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAiStream } from '@/lib/hooks/useAiStream';
 import { trackClientEvent } from '@/lib/analytics';
@@ -16,6 +17,7 @@ interface AiSummaryCardProps {
   datasetId: number | null;
   cachedContent?: string;
   cachedMetadata?: TransparencyMetadata | null;
+  cachedStaleAt?: string | null;
   tier?: SubscriptionTier;
   onToggleTransparency?: () => void;
   transparencyOpen?: boolean;
@@ -100,6 +102,40 @@ function SummaryText({ text }: { text: string }) {
           {highlightNumbers(p)}
         </p>
       ))}
+    </div>
+  );
+}
+
+function StaleBanner({
+  onRefresh,
+  disabled,
+}: {
+  onRefresh: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-accent-warm/40 bg-accent-warm/10 px-4 py-3"
+    >
+      <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-accent-warm" aria-hidden="true" />
+      <div className="flex-1">
+        <p className="text-sm font-medium text-card-foreground">
+          Your data has been updated
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          These insights were written before your latest sync. Refresh to regenerate them.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={disabled}
+        className="shrink-0 rounded-md bg-accent-warm px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-warm/90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        Refresh insights
+      </button>
     </div>
   );
 }
@@ -218,6 +254,7 @@ export function AiSummaryCard({
   datasetId,
   cachedContent,
   cachedMetadata,
+  cachedStaleAt,
   tier,
   onToggleTransparency,
   transparencyOpen,
@@ -234,9 +271,16 @@ export function AiSummaryCard({
   pdfStatus,
   className,
 }: AiSummaryCardProps) {
-  const hasCached = !!cachedContent;
+  const [refreshing, setRefreshing] = useState(false);
+  const isStale = !!(cachedStaleAt && new Date(cachedStaleAt).getTime() < Date.now());
+  const hasCached = !!cachedContent && !refreshing;
   const { status, text, metadata: streamMetadata, error, code, retryable, maxRetriesReached, retry } =
     useAiStream(hasCached ? null : datasetId);
+
+  const handleRefreshInsights = () => {
+    trackClientEvent(ANALYTICS_EVENTS.AI_SUMMARY_REQUESTED, { reason: 'stale_refresh' });
+    setRefreshing(true);
+  };
 
   // converge two metadata paths — stream (authenticated) or RSC cache (anonymous)
   const metadata = streamMetadata ?? cachedMetadata ?? null;
@@ -276,6 +320,9 @@ export function AiSummaryCard({
         role="region"
         aria-label="AI business summary"
       >
+        {isStale && (
+          <StaleBanner onRefresh={handleRefreshInsights} disabled={datasetId === null} />
+        )}
         <h3 className="mb-4 text-base font-semibold text-card-foreground">Analysis</h3>
         {wasTruncated ? (
           <FreePreviewOverlay previewText={preview} onUpgrade={handleUpgrade} />
