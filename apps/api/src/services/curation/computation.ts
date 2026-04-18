@@ -394,9 +394,60 @@ function computeSeasonalProjection(rows: DataRow[]): ComputedStat[] {
   }];
 }
 
+// Trailing-window cash flow. Uses the same monthly bucket pattern as
+// computeMarginTrend, but looks at the *recent* window because cash pressure
+// is about now, not historical average. Signed monthlyNet — negative = burning.
+function computeCashFlow(rows: DataRow[], trailingMonths = 3): ComputedStat[] {
+  const revenueByMonth = new Map<string, number>();
+  const expenseByMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    const amt = parseAmount(row.amount);
+    if (amt === null) continue;
+
+    const key = `${row.date.getFullYear()}-${String(row.date.getMonth() + 1).padStart(2, '0')}`;
+    if (row.parentCategory === 'Income') {
+      revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + amt);
+    } else if (row.parentCategory === 'Expenses') {
+      expenseByMonth.set(key, (expenseByMonth.get(key) ?? 0) + amt);
+    }
+  }
+
+  const months = [...new Set([...revenueByMonth.keys(), ...expenseByMonth.keys()])].sort();
+  if (months.length < trailingMonths) return [];
+
+  const window = months.slice(-trailingMonths);
+  const recentMonths = window.map((m) => {
+    const revenue = revenueByMonth.get(m) ?? 0;
+    const expenses = expenseByMonth.get(m) ?? 0;
+    return { month: m, revenue, expenses, net: revenue - expenses };
+  });
+
+  // Guards run in order — each is a reason to say nothing rather than say
+  // something misleading. A data gap or ill-defined threshold should never
+  // turn into AI commentary.
+  if (recentMonths.some((m) => m.revenue === 0)) return [];
+
+  const avgMonthlyRevenue = mean(recentMonths.map((m) => m.revenue));
+  if (avgMonthlyRevenue <= 0) return [];
+
+  const monthlyNet = median(recentMonths.map((m) => m.net));
+  if (Math.abs(monthlyNet) < 0.05 * avgMonthlyRevenue) return [];
+
+  const direction = monthlyNet < 0 ? 'burning' as const : 'surplus' as const;
+  const monthsBurning = recentMonths.filter((m) => m.net < 0).length;
+
+  return [{
+    statType: StatType.CashFlow,
+    category: null,
+    value: monthlyNet,
+    details: { monthlyNet, trailingMonths, direction, monthsBurning, recentMonths },
+  }];
+}
+
 export function computeStats(
   rows: DataRow[],
-  opts?: { trendMinPoints?: number },
+  opts?: { trendMinPoints?: number; cashFlowWindow?: number },
 ): ComputedStat[] {
   if (rows.length === 0) return [];
 
@@ -410,6 +461,7 @@ export function computeStats(
   if (allAmounts.length === 0) return [];
 
   const trendMinPoints = opts?.trendMinPoints ?? 3;
+  const cashFlowWindow = opts?.cashFlowWindow ?? 3;
 
   return [
     ...computeTotals(groups, allAmounts),
@@ -420,5 +472,6 @@ export function computeStats(
     ...computeYearOverYear(rows),
     ...computeMarginTrend(rows),
     ...computeSeasonalProjection(rows),
+    ...computeCashFlow(rows, cashFlowWindow),
   ];
 }
