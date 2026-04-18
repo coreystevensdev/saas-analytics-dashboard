@@ -9,7 +9,7 @@ import type { BusinessProfile } from 'shared/types';
 import { getIndustryBenchmarks } from './config/industry-benchmarks.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_VERSION = 'v1';
+const DEFAULT_VERSION = 'v1.1';
 const usd = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 function loadTemplate(version: string): string {
@@ -64,6 +64,11 @@ function formatStat(insight: ScoredInsight): string {
     }
     case StatType.SeasonalProjection:
       return `- [${category}] Seasonal Projection: ${stat.details.projectedMonth} estimated at $${usd.format(stat.details.projectedAmount)} based on ${stat.details.basisMonths.join(', ')} (confidence: ${stat.details.confidence}, relevance: ${score.toFixed(2)})`;
+    case StatType.CashFlow: {
+      const n = stat.details.monthlyNet;
+      const signed = `${n >= 0 ? '+' : '-'}$${usd.format(Math.abs(n))}`;
+      return `- [Overall] Cash Flow: ${stat.details.direction} — net ${signed}/mo over ${stat.details.trailingMonths} months (${stat.details.monthsBurning} burning, relevance: ${score.toFixed(2)})`;
+    }
   }
 }
 
