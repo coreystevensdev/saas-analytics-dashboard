@@ -1374,3 +1374,61 @@ So that I can use the application comfortably in any lighting condition.
 **When** accessibility is evaluated
 **Then** color contrast meets WCAG AA standards
 **And** color is not the sole means of conveying information (icons/labels accompany status colors) (NFR26)
+
+---
+
+## Epic 8: Post-MVP Insights & Delivery
+
+Post-MVP expansion of the AI-powered insight layer. Extends the curation pipeline (FR23–26) with new statistical capabilities — starting with cash flow — and the share/export layer (FR29–31) with new delivery surfaces (weekly email digest, accountant handoff). No new requirements against the original PRD; each story adds new stat types, scoring rules, prompt guidance, or delivery channels within the existing architecture.
+
+### Story 8.1: Cash Flow Insight — Trailing Burn/Surplus Stat Type
+
+As a **small business owner**,
+I want the AI to tell me whether I'm burning cash or building surplus over recent months,
+So that I understand my current cash position without waiting for my accountant.
+
+**Acceptance Criteria:**
+
+**Given** an organization has at least 3 months of CSV data with Income and Expenses rows
+**When** the curation pipeline runs
+**Then** a new `StatType.CashFlow` is computed from a trailing 3-month window (configurable via `opts.cashFlowWindow`)
+**And** `monthlyNet` is the median of the window's monthly (revenue − expenses)
+**And** the stat carries `direction` ∈ `{'burning', 'surplus', 'break_even'}`, `monthsBurning`, `trailingMonths`, and a full `recentMonths` breakdown (FR23)
+
+**Given** the trailing window has a month where `revenue === 0`
+**When** the cash flow stat is computed
+**Then** the stat is suppressed (empty array returned) — a data gap is not a real burn signal
+
+**Given** `|monthlyNet|` is below 5% of average monthly revenue over the window
+**When** the cash flow stat is computed
+**Then** `direction === 'break_even'` and the stat is suppressed (nothing actionable to say)
+
+**Given** a burning business with `monthsBurning >= 2`
+**When** scoring runs
+**Then** the stat receives high actionability (≥ 0.9) and high novelty (≥ 0.7)
+**And** the stat ranks in the top-N insights passed to assembly (FR23, FR25)
+
+**Given** the cash flow stat passes into assembly
+**When** `formatStat` renders it into the LLM prompt
+**Then** output is one line with signed `monthlyNet`, window size, direction, months burning, and relevance score
+
+**Given** the LLM receives cash flow context in the prompt
+**When** it generates the summary
+**Then** the framing follows the legal posture from `v1.md`: "you're spending about $X more than you're earning each month, worth reviewing with your accountant" — never "you should cut costs" (FR26)
+
+**Given** the privacy boundary from Story 3.1
+**When** cash flow is computed
+**Then** `computeCashFlow` receives `DataRow[]` inside `computation.ts` only
+**And** emits `CashFlowStat` with statistical summaries — no raw row references, no row IDs (FR23, NFR12)
+
+**Given** the computation is a pure function
+**When** unit tests run
+**Then** fixtures cover: burning business (3+ months of losses), surplus business (all positive nets), mixed (some burning, some surplus), and suppressed cases (zero-revenue gap, below 5% threshold, fewer than 3 months of data)
+
+### Story 8.2: (Planned) Cash Balance UX + Runway Months
+
+Captures user-provided cash balance on the Business Profile, computes `runway_months = cashBalance / monthlyBurn` when the cash flow stat reports `direction === 'burning'`. Requires Business Profile schema extension and a settings UX. Blocked by 8.1.
+
+### Story 8.3: (Planned) Forward Cash Flow Forecast
+
+Extends `SeasonalProjection` to project net cash flow for the next 1–3 months. Combines seasonal pattern and recent trend. Blocked by 8.1.
