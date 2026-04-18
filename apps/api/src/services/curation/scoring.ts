@@ -58,6 +58,11 @@ function noveltyScore(stat: ComputedStat): number {
       return Math.abs(stat.details.changePercent) > 15 ? 0.85 : 0.6;
     case StatType.MarginTrend:
       return stat.details.direction !== 'stable' ? 0.8 : 0.35;
+    case StatType.CashFlow:
+      if (stat.details.direction === 'burning') {
+        return stat.details.monthsBurning >= 2 ? 0.85 : 0.7;
+      }
+      return 0.5; // surplus
     case StatType.Trend:
       return Math.abs(stat.details.growthPercent) > scoringConfig.thresholds.significantChangePercent ? 0.8 : 0.4;
     case StatType.CategoryBreakdown:
@@ -77,6 +82,13 @@ function actionabilityScore(stat: ComputedStat): number {
       return stat.details.confidence === 'high' ? 0.9 : 0.7;
     case StatType.MarginTrend:
       return stat.details.direction === 'shrinking' ? 0.9 : 0.5;
+    case StatType.CashFlow:
+      // Ties MarginTrend shrinking at 0.9 — margin compression is the leading
+      // signal, cash burn is the trailing consequence. Not inverted.
+      if (stat.details.direction === 'burning') {
+        return stat.details.monthsBurning >= 2 ? 0.9 : 0.75;
+      }
+      return 0.5; // surplus
     case StatType.YearOverYear:
       return Math.abs(stat.details.changePercent) > 10 ? 0.8 : 0.4;
     case StatType.Trend:
@@ -96,6 +108,8 @@ function specificityScore(stat: ComputedStat): number {
       return stat.category !== null ? 0.95 : 0.7;
     case StatType.SeasonalProjection:
       return 0.85;
+    case StatType.CashFlow:
+      return 0.85; // parity with SeasonalProjection — both carry named months and exact amounts
     case StatType.MarginTrend:
       return 0.8;
     case StatType.YearOverYear:

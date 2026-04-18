@@ -33,6 +33,7 @@ const STAT_TYPE_LABELS: Record<string, string> = {
   trend: 'Trend analysis',
   anomaly: 'Anomaly detection',
   category_breakdown: 'Category breakdown',
+  cash_flow: 'Cash Flow',
 };
 
 function Badge({ children }: { children: React.ReactNode }) {
