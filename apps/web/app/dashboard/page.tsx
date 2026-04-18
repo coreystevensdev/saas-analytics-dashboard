@@ -21,14 +21,21 @@ const EMPTY_CHART_DATA: ChartData = {
 interface CachedSummaryResult {
   content: string;
   metadata: TransparencyMetadata | null;
+  staleAt: string | null;
 }
 
 async function fetchCachedSummary(datasetId: number): Promise<CachedSummaryResult | undefined> {
   try {
-    const res = await apiServer<{ content: string; metadata: TransparencyMetadata | null }>(
-      `/ai-summaries/${datasetId}/cached`,
-    );
-    return { content: res.data.content, metadata: res.data.metadata };
+    const res = await apiServer<{
+      content: string;
+      metadata: TransparencyMetadata | null;
+      staleAt?: string | null;
+    }>(`/ai-summaries/${datasetId}/cached`);
+    return {
+      content: res.data.content,
+      metadata: res.data.metadata,
+      staleAt: res.data.staleAt ?? null,
+    };
   } catch {
     return undefined;
   }
@@ -72,10 +79,12 @@ export default async function DashboardPage() {
   // no tier gating — full seed summary is the "aha moment"
   let cachedSummary: string | undefined;
   let cachedMetadata: TransparencyMetadata | null = null;
+  let cachedStaleAt: string | null = null;
   if (!hasAuth && chartData.datasetId) {
     const cached = await fetchCachedSummary(chartData.datasetId);
     cachedSummary = cached?.content;
     cachedMetadata = cached?.metadata ?? null;
+    cachedStaleAt = cached?.staleAt ?? null;
   }
 
   // authenticated users get tier-gated experience
@@ -96,6 +105,7 @@ export default async function DashboardPage() {
       initialData={chartData}
       cachedSummary={cachedSummary}
       cachedMetadata={cachedMetadata}
+      cachedStaleAt={cachedStaleAt}
       tier={tier}
       needsOnboarding={needsOnboarding}
     />
