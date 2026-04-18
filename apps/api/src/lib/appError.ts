@@ -40,10 +40,21 @@ export class QuotaExceededError extends AppError {
   }
 }
 
-export class ExternalServiceError extends AppError {
-  readonly service: string;
+// Closed union of valid service names. Typing the constructor arg as this
+// union means a typo at the throw site fails at compile time instead of
+// silently fragmenting Sentry issues. Add a new entry here before throwing
+// from a new vendor integration.
+export type ExternalService =
+  | 'Stripe'
+  | 'Claude API'
+  | 'Google OAuth'
+  | 'Intuit OAuth'
+  | 'Intuit OAuth — token revoked';
 
-  constructor(service: string, details?: unknown) {
+export class ExternalServiceError extends AppError {
+  readonly service: ExternalService;
+
+  constructor(service: ExternalService, details?: unknown) {
     super(`External service error: ${service}`, 'EXTERNAL_SERVICE_ERROR', 502, details);
     this.service = service;
   }
