@@ -263,6 +263,41 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* A note from the maker — deliberately off-rhythm (narrower, left-aligned) to break the centered sections around it */}
+      <section className="border-t border-border/40 bg-muted/20">
+        <div className="mx-auto max-w-4xl px-4 py-14 md:px-6 md:py-20">
+          <div className="md:grid md:grid-cols-[140px_1fr] md:gap-10">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              From the maker
+            </p>
+            <div className="mt-4 md:mt-0">
+              <p className="text-base leading-relaxed text-foreground md:text-lg">
+                I kept watching small business owners open their dashboards, squint,
+                and close the laptop. The numbers were all there — nobody could tell
+                what any of it meant. Tellsight is the thing I wished existed:
+                interpretation, not just visualization.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+                If you try it and the AI gets something wrong, tell me directly.
+                I read every note and use them to tune the prompts. That&apos;s the
+                advantage of a small product — the person who built it is also the
+                person who fixes it.
+              </p>
+              <p className="mt-6 text-sm text-foreground">
+                — Corey, maker of Tellsight
+                <br />
+                <a
+                  href="mailto:hello@tellsight.com"
+                  className="text-primary underline-offset-4 transition-colors hover:underline"
+                >
+                  hello@tellsight.com
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Bottom CTA — short */}
       <section className="border-t border-border/40">
         <div className="mx-auto max-w-6xl px-4 py-16 text-center md:px-6 md:py-20">
