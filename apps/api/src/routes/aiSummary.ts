@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import type { Response } from 'express';
+
 import { ANALYTICS_EVENTS, AI_MONTHLY_QUOTA } from 'shared/constants';
-
 import type { SubscriptionTier } from 'shared/types';
-
 import { requireUser } from '../lib/requireUser.js';
 import { subscriptionGate } from '../middleware/subscriptionGate.js';
 import { rateLimitAi } from '../middleware/rateLimiter.js';
