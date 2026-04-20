@@ -332,6 +332,31 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
   }),
 }));
 
+// Append-only history of cash balance updates. Runway-over-time depends on
+// this existing from day one — backfilling snapshots is impossible.
+export const cashBalanceSnapshots = pgTable(
+  'cash_balance_snapshots',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    orgId: integer('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    balance: numeric('balance', { precision: 14, scale: 2 }).notNull(),
+    asOfDate: timestamp('as_of_date', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_cash_balance_snapshots_org_as_of_desc').on(table.orgId, table.asOfDate.desc()),
+  ],
+);
+
+export const cashBalanceSnapshotsRelations = relations(cashBalanceSnapshots, ({ one }) => ({
+  org: one(orgs, {
+    fields: [cashBalanceSnapshots.orgId],
+    references: [orgs.id],
+  }),
+}));
+
 export const usersRelations = relations(users, ({ many }) => ({
   userOrgs: many(userOrgs),
   refreshTokens: many(refreshTokens),
