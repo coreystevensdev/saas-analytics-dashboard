@@ -171,10 +171,14 @@ function validate() {
 
   console.log(`\nPASS (guards): ${validTypes.length} distinct stat types: [${validTypes.join(', ')}]`);
 
-  // phase 2: anomaly-specific assertions
+  // phase 2: anomaly-specific assertions. Tracks the seed fixture through scoring
+  // — December revenue spike + October payroll drive the anomalies; 12 months of
+  // revenue-vs-expense drives margin_trend; per-category series drives trend.
+  // category_breakdown no longer makes top-N once trend + margin_trend land in the
+  // mix (pre-Epic-8 snapshot pre-dated that scoring reshuffle).
   assertStatType(metadata.statTypes, 'anomaly', 'December revenue spike + October payroll');
-  assertStatType(metadata.statTypes, 'category_breakdown', '6 expense/income categories');
   assertStatType(metadata.statTypes, 'trend', 'revenue growth + marketing patterns');
+  assertStatType(metadata.statTypes, 'margin_trend', '12 months of income + expenses');
 
   if (metadata.insightCount < 3) {
     console.error(`FAIL: expected insightCount >= 3, got ${metadata.insightCount}`);
@@ -182,9 +186,10 @@ function validate() {
   }
 
   // categoryCount reflects curated insights (top-N scoring), not raw data categories.
-  // with 6 seed categories and topN=8, at least 5 categories should appear in curated output.
-  if (metadata.categoryCount < 5) {
-    console.error(`FAIL: expected categoryCount >= 5, got ${metadata.categoryCount}`);
+  // Top-N for this fixture is 2 anomalies + 5 trends + 1 margin_trend = 5 distinct
+  // categories once margin_trend (null category) is excluded.
+  if (metadata.categoryCount < 4) {
+    console.error(`FAIL: expected categoryCount >= 4, got ${metadata.categoryCount}`);
     process.exit(1);
   }
 
