@@ -106,9 +106,10 @@ development_status:
   epic-7-retrospective: done
 
   # ── Epic 8: Post-MVP Insights & Delivery ──
-  epic-8: in-progress
+  epic-8: done
   8-1-cash-flow-insight: done
   8-2-cash-balance-ux-runway-months: done
   8-3-break-even-analysis-fixed-costs: done
-  8-4-forward-cash-flow-forecast: review
+  8-4-forward-cash-flow-forecast: done
   8-5-inline-chart-thumbnails-insight-mapping: done
+  epic-8-retrospective: done

@@ -1,6 +1,6 @@
 # Story 8.4: Forward Cash Flow Forecast
 
-Status: review
+Status: done
 
 <!-- Note: Validation is REQUIRED. Every story must complete all 4 steps: Create → Validate → Dev → Code Review. -->
 <!-- Post-MVP story. Epic 8 cash-flow arc. Final story in Epic 8.
