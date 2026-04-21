@@ -1514,3 +1514,7 @@ Captures user-provided `monthlyFixedCosts` on the financial baseline, computes `
 ### Story 8.4: (Planned) Forward Cash Flow Forecast
 
 Extends `SeasonalProjection` to project net cash flow for the next 1–3 months. Combines seasonal pattern and recent trend. Blocked by 8.1.
+
+### Story 8.5: Inline Chart Thumbnails + Insight-to-Chart Mapping
+
+Binds AI summary paragraphs to the dashboard charts that back them. The LLM emits `<stat id="..."/>` sentinel tokens inline; the client strips tags during SSE streaming, then post-stream parses them into paragraph-to-stat bindings, renders 180×120 thumbnails (desktop) or chips opening a bottom sheet (mobile), and opens a drill-down sheet with the filtered chart + pre-computed stat details. A Tier 2 validator extension catches hallucinated stat refs; the existing `ai_summaries` cache stays valid because stat IDs are stable. Reuses Story 4.1's `html-to-image` path so shared PNGs include thumbnails for free. Prompt version bumps `v1.3` → `v1.4` with a per-request stat-ID allowlist injected into the system prompt. Tech spec + 12-decision log at `_bmad-output/implementation-artifacts/8-5-inline-chart-thumbnails-insight-mapping.md`. Blocked by 8.2 (done) for the `/api/org/financials/cash-history` endpoint that powers the new `RunwayTrendChart`.

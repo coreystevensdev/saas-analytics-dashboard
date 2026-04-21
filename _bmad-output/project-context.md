@@ -522,6 +522,15 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Confidence tiers (`high`/`moderate`/`low`) derive deterministically from `ageInDays` + `monthsBurning` — see `runwayConfidence()`.
 - Financial baseline flows through `runFullPipeline` → `runCurationPipeline` → `computeStats(opts.financials)`. Do NOT thread through `services/aiInterpretation/provider.ts` — `computeStats` is not called from there.
 
+**Insight-Chart Mapping (Story 8.5+):**
+- Paragraphs in AI summaries bind to charts via `<stat id="..."/>` tokens emitted inline by the LLM. Tokens are stripped client-side (`stripStatTags` in `useAiStream.ts`); the raw buffer is parsed post-stream by `parseStatBindings` to produce `{paragraphIndex, statId}[]`.
+- **Allowlist injection lives in `assemblePrompt`** — `{{allowedStatIds}}` placeholder receives a sorted, deduped list of stat types from the active `ComputedStat[]`. The LLM is instructed to tag only IDs from this list. New stat types automatically become taggable as soon as they appear in scoring output.
+- **Validator strips invalid refs server-side** before cache write — `validateStatRefs` flags hallucinated IDs, `stripInvalidStatRefs` removes them from `cachedText`, `streamHandler` emits `ANALYTICS_EVENTS.AI_CHART_REF_INVALID`. Live stream is already past `done` at this point; client-side strip handles user-visible text.
+- **`STAT_CHART_MAP` at `apps/web/app/dashboard/charts/statChartMap.ts` is the single source of truth.** Stats absent from the map render **prose-only — no chip, no thumbnail.** Adding a new stat-chart pairing is one entry in this file. Do NOT call `STAT_CHART_MAP[id]` without nullish-checking — `Partial<Record<...>>`, unmapped IDs return `undefined`.
+- **Cache posture: prompt version is the only invalidation key.** Stat IDs are stable enum strings (`'runway'`, `'cash_flow'`, ...); chart-component evolution doesn't require cache invalidation. Renaming a stat type is a migration event, handled case-by-case.
+- **Mobile-vs-desktop affordance** uses `useIsMobile` (`max-width: 767px`). Mobile shows `InsightChartChip` (label + arrow); desktop shows `InsightChartThumbnail` (180×120 inline preview). Both trigger the same `InsightChartSheet` drill-down.
+- **`SharedInsightCard` strips tags too.** Public share pages have no JS state and no chart data; raw `<stat id="..."/>` tokens are stripped via inline regex. Forgetting this leaks markup into shared views.
+
 ---
 
 ## Usage Guidelines
