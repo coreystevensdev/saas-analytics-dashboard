@@ -450,6 +450,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - This is architecturally enforced by type signatures, not just convention
 - Scoring weights in `config/scoring-weights.json` — tunable without code changes
 - Prompt templates versioned independently in `config/prompt-templates/v1.md`
+- **Prompt versioning history:** `v1` (Epic 3 baseline) → `v1.1` (Story 8.1 cash-flow framing) → `v1.3` (Story 8.2 runway framing + low-confidence hedge) → `v1.4` (Story 8.5 chart tagging) → `v1.5` (Story 8.3 break-even framing + runway-break-even dedup). Each bump cache-invalidates `ai_summaries` rows keyed on the prior version. Prior templates preserved on disk for cache-replay compatibility.
 
 **AI Summary Cache-First Strategy:**
 - `ai_summaries` table stores generated summaries (content, transparency_metadata, prompt_version, is_seed, stale_at)
@@ -509,12 +510,15 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - History of `cashOnHand` lives in append-only `cash_balance_snapshots` (orgId FK, balance, asOfDate). Required for runway-over-time trending — backfilling snapshots is impossible.
 - **Never write `orgs.businessProfile` directly when changing `cashOnHand`** — use `orgFinancialsQueries.updateOrgFinancials` which is transactional (JSONB merge + snapshot insert in one tx). `updateBusinessProfile` at `db/queries/orgs.ts:51` does FULL replacement and will blow away existing profile fields.
 - JSONB merge idiom: `sql\`business_profile || \${JSON.stringify(updates)}::jsonb\`` — existing keys survive, new keys set. Do not round-trip through read-modify-write.
+- **Break-even revenue** is computed from `MarginTrend.details.recentMarginPercent` + `monthlyFixedCosts`. Both must be present and margin must exceed 2% or the stat suppresses. `computeBreakEven` consumes pre-aggregated stats — never `DataRow[]` — same privacy pattern as `computeRunway`. `currentMonthlyRevenue` sources from the `latestMonthlyRevenue(rows)` helper in `computation.ts`, NOT from `CashFlowStat.recentMonths` (CashFlow suppresses for near-break-even businesses, which would silently kill break-even for healthy orgs).
 
 **Locked Insight UX Pattern (Story 8.2+):**
 - When a stat requires an owner-provided input (runway → cashOnHand, break-even → monthlyFixedCosts), render `LockedInsightCard` inline in the dashboard feed. Contextual prompt, inline submit, no onboarding bloat.
 - Component lives at `apps/web/app/dashboard/LockedInsightCard.tsx`. Reusable — accepts title/description/inputLabel/onSubmit props.
 - Do NOT front-load owner-input fields into `OnboardingModal.tsx`. Onboarding completion rate is protected; gated stats prompt at point-of-value.
 - Stale-data banner (`CashBalanceStaleBanner.tsx`) re-prompts at >30 days age, sessionStorage-dismissible. Mirror the pattern for other time-sensitive inputs.
+- Break-Even and Runway are the first two consumers. The pattern scales to any owner-input-gated stat — adding a third (e.g., inventory turnover) means a new computation, a new detection flag in `DashboardShell`, and a new `<LockedInsightCard>` instance; the component itself requires no change. Order in the feed reflects scoring: Runway (existential) before Break-Even (quantified target).
+- Detection for break-even reads `data.hasMarginSignal` from `GET /api/dashboard/charts` — deterministic from row count, available on first dashboard load without waiting for the AI summary stream. Do NOT derive the flag from `TransparencyMetadata.statTypes` — a fresh user with >4 months of data but no streamed summary would see no card.
 
 **Runway Computation Boundary (Story 8.2):**
 - `computeRunway` consumes `CashFlowStat[]` + `{ cashOnHand, cashAsOfDate }` — NEVER `DataRow[]`. Privacy boundary is non-negotiable.
@@ -553,4 +557,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - UX Design: `_bmad-output/planning-artifacts/ux-design-specification.md` (~2000 lines, all screens + components)
 - This file is the LLM-optimized subset — agents should start here, reference architecture/UX for depth
 
-Last Updated: 2026-04-20 (Story 8.2 — Runway + Locked Insight pattern)
+Last Updated: 2026-04-21 (Story 8.3 — Break-Even Analysis + `hasMarginSignal` API flag)
