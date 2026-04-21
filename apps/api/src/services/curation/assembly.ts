@@ -9,7 +9,7 @@ import type { BusinessProfile } from 'shared/types';
 import { getIndustryBenchmarks } from './config/industry-benchmarks.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_VERSION = 'v1.4';
+const DEFAULT_VERSION = 'v1.5';
 const usd = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 function loadTemplate(version: string): string {
@@ -75,6 +75,13 @@ function formatStat(insight: ScoredInsight): string {
       const cash = `$${usd.format(stat.details.cashOnHand)}`;
       const asOf = stat.details.cashAsOfDate.slice(0, 10); // YYYY-MM-DD
       return `- [Overall] Runway: ${stat.details.runwayMonths.toFixed(1)} months — net ${signedNet}/mo, cash ${cash} as of ${asOf} (confidence: ${stat.details.confidence}, relevance: ${score.toFixed(2)})`;
+    }
+    case StatType.BreakEven: {
+      const gap = stat.details.gap;
+      const gapStr = gap >= 0 ? `$${usd.format(gap)}` : `-$${usd.format(Math.abs(gap))}`;
+      const be = `$${usd.format(stat.details.breakEvenRevenue)}`;
+      const cur = `$${usd.format(stat.details.currentMonthlyRevenue)}`;
+      return `- [Overall] Break-Even: ${be}/mo at ${stat.details.marginPercent.toFixed(1)}% margin — current revenue ${cur}/mo, gap ${gapStr} (confidence: ${stat.details.confidence}, relevance: ${score.toFixed(2)})`;
     }
   }
 }
