@@ -112,6 +112,16 @@ function classifyStatNumbers(stat: ComputedStat, sets: AllowedSets): void {
       addC(stat.details.cashOnHand);
       addC(Math.abs(stat.details.monthlyNet));
       return;
+    case StatType.BreakEven:
+      // breakEvenRevenue, monthlyFixedCosts, currentMonthlyRevenue: the three
+      // currency tokens the LLM is expected to quote. `gap` is not pushed
+      // separately — it's already expressible as |breakEvenRevenue - currentRevenue|
+      // via the pairwise-sum loop below. Pushing it would mask the tolerance
+      // check. marginPercent is already covered by MarginTrend classification.
+      addC(stat.details.breakEvenRevenue);
+      addC(stat.details.monthlyFixedCosts);
+      addC(stat.details.currentMonthlyRevenue);
+      return;
   }
 }
 

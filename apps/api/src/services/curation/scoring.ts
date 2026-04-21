@@ -69,6 +69,10 @@ function noveltyScore(stat: ComputedStat): number {
       // Quantified risk > unquantified signal. 0.85 beats CashFlow burning (0.80)
       // because a month count is strictly more informative than direction alone.
       return stat.details.runwayMonths < 6 ? 0.85 : 0.65;
+    case StatType.BreakEven:
+      // Gap > 0 means revenue is below break-even: the "how much more do I need"
+      // question is a concrete target. Above break-even is reassuring, not novel.
+      return stat.details.gap > 0 ? 0.75 : 0.60;
     case StatType.Trend:
       return Math.abs(stat.details.growthPercent) > scoringConfig.thresholds.significantChangePercent ? 0.8 : 0.4;
     case StatType.CategoryBreakdown:
@@ -101,6 +105,10 @@ function actionabilityScore(stat: ComputedStat): number {
       if (stat.details.runwayMonths < 6) return 0.95;
       if (stat.details.runwayMonths < 24) return 0.70;
       return 0.45;
+    case StatType.BreakEven:
+      // 0.88 when below break-even: the revenue-gap number is directly actionable.
+      // 0.55 when already above: reassuring data point, nothing to push on.
+      return stat.details.gap > 0 ? 0.88 : 0.55;
     case StatType.YearOverYear:
       return Math.abs(stat.details.changePercent) > 10 ? 0.8 : 0.4;
     case StatType.Trend:
@@ -129,6 +137,17 @@ function specificityScore(stat: ComputedStat): number {
       // 0.90 flat — runway output is an exact month count. Nothing more specific
       // than "3.2 months" in this domain.
       return 0.9;
+    case StatType.BreakEven:
+      // 0.85 flat — break-even is a revenue target and targets are inherently
+      // fuzzier than a month count (depends on maintaining the margin assumption).
+      //
+      // Scoring order: Runway critical (0.9025) > CashFlow burning (0.8400) >
+      // BreakEven gap-positive (0.8270). Runway leads because it carries the most
+      // urgent signal (existential timeline). Burning follows because a binary
+      // urgency cue should precede a quantified target. BreakEven trails by
+      // design — it refines the burn signal rather than originating one. If any
+      // score flips the order here, a weight was tuned and both rationales need review.
+      return 0.85;
     case StatType.MarginTrend:
       return 0.8;
     case StatType.YearOverYear:

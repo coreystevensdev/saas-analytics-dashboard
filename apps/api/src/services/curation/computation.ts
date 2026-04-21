@@ -9,12 +9,20 @@ import {
   max,
 } from 'simple-statistics';
 
-import type { ComputedStat, CashFlowStat, RunwayStat } from './types.js';
+import type {
+  ComputedStat,
+  CashFlowStat,
+  RunwayStat,
+  BreakEvenStat,
+  MarginTrendStat,
+  MarginTrendDetails,
+} from './types.js';
 import { StatType } from './types.js';
 
 export interface RunwayFinancials {
   cashOnHand?: number;
   cashAsOfDate?: string;
+  monthlyFixedCosts?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -280,7 +288,7 @@ function computeYearOverYear(rows: DataRow[]): ComputedStat[] {
   return stats;
 }
 
-function computeMarginTrend(rows: DataRow[]): ComputedStat[] {
+function computeMarginTrend(rows: DataRow[]): MarginTrendStat[] {
   const revenueByMonth = new Map<string, number>();
   const expenseByMonth = new Map<string, number>();
 
@@ -514,6 +522,94 @@ export function computeRunway(
   }];
 }
 
+/**
+ * Revenue of the most recent month in the dataset. Parallel to the monthly
+ * aggregation computeMarginTrend does internally, but returns a scalar: the
+ * revenue of the latest YYYY-MM bucket. Empty input returns 0, which lets
+ * computeBreakEven treat pre-revenue businesses as "gap equals the full target."
+ *
+ * Not pulled from CashFlowStat.details.recentMonths because CashFlow suppresses
+ * for near-break-even businesses — borrowing its data would silently suppress
+ * break-even for healthy orgs that genuinely need the reassuring framing.
+ */
+function latestMonthlyRevenue(rows: DataRow[]): number {
+  const revenueByMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    if (row.parentCategory !== 'Income') continue;
+    const amt = parseAmount(row.amount);
+    if (amt === null) continue;
+
+    const key = `${row.date.getFullYear()}-${String(row.date.getMonth() + 1).padStart(2, '0')}`;
+    revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + amt);
+  }
+
+  if (revenueByMonth.size === 0) return 0;
+  const months = [...revenueByMonth.keys()].sort();
+  return revenueByMonth.get(months[months.length - 1]!) ?? 0;
+}
+
+export function breakEvenConfidence(
+  marginPercent: number,
+  direction: MarginTrendDetails['direction'],
+): 'high' | 'moderate' | 'low' {
+  if (marginPercent >= 10) {
+    return direction === 'shrinking' ? 'moderate' : 'high';
+  }
+  if (marginPercent >= 5) return 'moderate';
+  return 'low';
+}
+
+/**
+ * Consumes an already-computed MarginTrendStat plus two scalars. Privacy
+ * boundary: no DataRow[] — the aggregation is done upstream.
+ *
+ * Suppression cases return [] — six of them, each a reason to say nothing
+ * rather than something misleading:
+ *   - No margin signal (MarginTrend suppressed: too little data or zero revenue)
+ *   - monthlyFixedCosts null/undefined/zero (nothing to solve for)
+ *   - currentMonthlyRevenue is NaN (upstream aggregation bug guard)
+ *   - Non-positive margin (negative break-even is nonsensical; zero is infinite)
+ *   - Margin below 2% (produces implausibly large break-even — 1% margin
+ *     on $10k fixed costs = $1M revenue target, which misleads more than informs)
+ *
+ * The 2% threshold is editorial, not mathematical. CashFlow uses a 5% band for
+ * its own suppression — different concerns, different thresholds, both documented.
+ */
+export function computeBreakEven(
+  marginStats: MarginTrendStat[],
+  monthlyFixedCosts: number | null | undefined,
+  currentMonthlyRevenue: number,
+): BreakEvenStat[] {
+  if (marginStats.length === 0) return [];
+  if (monthlyFixedCosts == null || monthlyFixedCosts === 0) return [];
+  if (!Number.isFinite(currentMonthlyRevenue)) return [];
+
+  const margin = marginStats[0]!;
+  const marginPercent = margin.details.recentMarginPercent;
+
+  if (marginPercent <= 0) return [];
+  if (marginPercent < 2) return [];
+
+  const breakEvenRevenue = Math.round(monthlyFixedCosts / (marginPercent / 100));
+  const gap = breakEvenRevenue - currentMonthlyRevenue;
+  const confidence = breakEvenConfidence(marginPercent, margin.details.direction);
+
+  return [{
+    statType: StatType.BreakEven,
+    category: null,
+    value: breakEvenRevenue,
+    details: {
+      monthlyFixedCosts,
+      marginPercent,
+      breakEvenRevenue,
+      currentMonthlyRevenue,
+      gap,
+      confidence,
+    },
+  }];
+}
+
 export function computeStats(
   rows: DataRow[],
   opts?: {
@@ -539,6 +635,13 @@ export function computeStats(
 
   const cashFlowStats = computeCashFlow(rows, cashFlowWindow);
   const runwayStats = computeRunway(cashFlowStats, opts?.financials, opts?.now);
+  const marginStats = computeMarginTrend(rows);
+  const currentMonthlyRevenue = latestMonthlyRevenue(rows);
+  const breakEvenStats = computeBreakEven(
+    marginStats,
+    opts?.financials?.monthlyFixedCosts,
+    currentMonthlyRevenue,
+  );
 
   return [
     ...computeTotals(groups, allAmounts),
@@ -547,9 +650,10 @@ export function computeStats(
     ...detectAnomalies(groups),
     ...computeCategoryBreakdowns(groups),
     ...computeYearOverYear(rows),
-    ...computeMarginTrend(rows),
+    ...marginStats,
     ...computeSeasonalProjection(rows),
     ...cashFlowStats,
     ...runwayStats,
+    ...breakEvenStats,
   ];
 }
