@@ -38,6 +38,7 @@ const STAT_TYPE_LABELS: Record<string, string> = {
   seasonal_projection: 'Seasonal projection',
   cash_flow: 'Cash Flow',
   runway: 'Runway',
+  break_even: 'Break-Even',
 };
 
 function Badge({ children }: { children: React.ReactNode }) {

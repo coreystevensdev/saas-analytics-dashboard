@@ -11,6 +11,7 @@ export const StatType = {
   SeasonalProjection: 'seasonal_projection',
   CashFlow: 'cash_flow',
   Runway: 'runway',
+  BreakEven: 'break_even',
 } as const;
 
 export type StatType = (typeof StatType)[keyof typeof StatType];
@@ -96,6 +97,19 @@ export interface RunwayDetails {
   confidence: 'high' | 'moderate' | 'low';
 }
 
+// Monthly revenue needed to cover fixed costs at the current margin. Emitted only
+// when MarginTrend is present, fixed costs are set, and margin is at least 2%.
+// `gap` is signed — positive means revenue is below break-even (still burning);
+// negative means revenue already covers fixed costs.
+export interface BreakEvenDetails {
+  monthlyFixedCosts: number;
+  marginPercent: number;
+  breakEvenRevenue: number;
+  currentMonthlyRevenue: number;
+  gap: number;
+  confidence: 'high' | 'moderate' | 'low';
+}
+
 interface BaseComputedStat {
   category: string | null;
   value: number;
@@ -152,6 +166,11 @@ export interface RunwayStat extends BaseComputedStat {
   details: RunwayDetails;
 }
 
+export interface BreakEvenStat extends BaseComputedStat {
+  statType: 'break_even';
+  details: BreakEvenDetails;
+}
+
 export type ComputedStat =
   | TotalStat
   | AverageStat
@@ -162,7 +181,8 @@ export type ComputedStat =
   | MarginTrendStat
   | SeasonalProjectionStat
   | CashFlowStat
-  | RunwayStat;
+  | RunwayStat
+  | BreakEvenStat;
 
 export interface ScoredInsight {
   stat: ComputedStat;
