@@ -1,7 +1,7 @@
 {
   "statTypes": [
     "anomaly",
-    "category_breakdown",
+    "margin_trend",
     "trend"
   ],
   "categoryCount": 5,
@@ -11,7 +11,7 @@
     "actionability": 0.9,
     "specificity": 0.95
   },
-  "promptVersion": "v1",
-  "promptLength": 2375,
-  "promptHash": "6cf811c8f78abab8b0167dde2715011b1090a4a30169c0f23748f52615847a8b"
+  "promptVersion": "v1.5",
+  "promptLength": 9951,
+  "promptHash": "5096d6bc07b452672bfd7ec878b74620ee66a0616a24dddd50f7bb7d0cfff4f8"
 }
