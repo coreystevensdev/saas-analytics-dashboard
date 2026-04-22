@@ -75,12 +75,20 @@ test.describe('saveCashBalance revalidation', () => {
     // Fixture guarantees only the Runway card renders, so a page-wide role
     // query is unambiguous. Break-Even card is hidden because monthlyFixedCosts
     // is set (the gate is `== null` on that field).
-    await expect(
-      page.getByRole('heading', { name: 'Enable Runway' }),
-    ).toBeVisible({ timeout: 10_000 });
+    const runwayHeading = page.getByRole('heading', { name: 'Enable Runway' });
+    await expect(runwayHeading).toBeVisible({ timeout: 10_000 });
+    await runwayHeading.scrollIntoViewIfNeeded();
 
-    await page.getByLabel(/current cash balance/i).fill('50000');
-    await page.getByRole('button', { name: /^save$/i }).click();
+    const input = page.getByLabel(/current cash balance/i);
+    await input.fill('50000');
+
+    const saveButton = page.getByRole('button', { name: /^save$/i });
+    // Wait for `valid` to flip true inside LockedInsightCard — the button
+    // is `disabled={!valid || submitting}`. Playwright's auto-retry on
+    // click times out at 30s if the button stays disabled, which is what
+    // we were seeing in CI before this wait.
+    await expect(saveButton).toBeEnabled({ timeout: 5_000 });
+    await saveButton.click();
 
     // After the Promise.all resolves, financials revalidates → needsCashBalance
     // flips false → LockedInsightCard unmounts. If any SWR key is left stale
