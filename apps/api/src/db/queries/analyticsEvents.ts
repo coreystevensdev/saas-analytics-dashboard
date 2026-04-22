@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, lt, count, type SQL } from 'drizzle-orm';
+import { eq, desc, and, gte, lte, lt, count, sql, type SQL } from 'drizzle-orm';
 import { db, dbAdmin, type DbTransaction } from '../../lib/db.js';
 import { analyticsEvents, orgs, users } from '../schema.js';
 import { ANALYTICS_EVENTS, type AnalyticsEventName } from 'shared/constants';
@@ -126,4 +126,54 @@ export async function getMonthlyAiUsageCount(
     );
 
   return row?.value ?? 0;
+}
+
+export interface AiUsageStats {
+  inputTokens: number;
+  outputTokens: number;
+  requestCount: number;
+}
+
+/**
+ * Sum AI token usage across all orgs within a time window. Pulls from the
+ * `AI_SUMMARY_COMPLETED` event's JSONB metadata (where the SSE stream records
+ * per-request `inputTokens`/`outputTokens` after each Anthropic call). Used
+ * by the admin dashboard cost tile — caller scopes the window (default is
+ * month-to-date via getMonthToDateAiUsage).
+ *
+ * `::text::integer` casts handle the JSONB→SQL-int conversion. `COALESCE`
+ * yields 0 when the filter matches no rows (empty month, new deploy).
+ */
+export async function getAiUsageStats(
+  windowStart: Date,
+  client: typeof db | DbTransaction = dbAdmin,
+): Promise<AiUsageStats> {
+  const [row] = await client
+    .select({
+      inputTokens: sql<number>`COALESCE(SUM((${analyticsEvents.metadata}->>'inputTokens')::int), 0)::int`,
+      outputTokens: sql<number>`COALESCE(SUM((${analyticsEvents.metadata}->>'outputTokens')::int), 0)::int`,
+      requestCount: count(),
+    })
+    .from(analyticsEvents)
+    .where(
+      and(
+        eq(analyticsEvents.eventName, ANALYTICS_EVENTS.AI_SUMMARY_COMPLETED),
+        gte(analyticsEvents.createdAt, windowStart),
+      ),
+    );
+
+  return {
+    inputTokens: row?.inputTokens ?? 0,
+    outputTokens: row?.outputTokens ?? 0,
+    requestCount: row?.requestCount ?? 0,
+  };
+}
+
+export async function getMonthToDateAiUsage(
+  client: typeof db | DbTransaction = dbAdmin,
+): Promise<AiUsageStats> {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  return getAiUsageStats(monthStart, client);
 }

@@ -1,6 +1,8 @@
 import { eq, sql, count } from 'drizzle-orm';
+import { estimateClaudeCostUsd } from 'shared/constants';
 import { dbAdmin } from '../../lib/db.js';
 import { orgs, users, userOrgs, datasets, subscriptions } from '../schema.js';
+import { getMonthToDateAiUsage } from './analyticsEvents.js';
 
 /**
  * Cross-org queries — no orgId param. Gated by roleGuard('admin') at the route layer.
@@ -108,16 +110,26 @@ export async function getOrgDetail(orgId: number) {
 }
 
 export async function getAdminStats() {
-  const [orgCount] = await dbAdmin.select({ value: count() }).from(orgs);
-  const [userCount] = await dbAdmin.select({ value: count() }).from(users);
-  const [proCount] = await dbAdmin
-    .select({ value: count() })
-    .from(subscriptions)
-    .where(eq(subscriptions.plan, 'pro'));
+  const [[orgCount], [userCount], [proCount], aiUsage] = await Promise.all([
+    dbAdmin.select({ value: count() }).from(orgs),
+    dbAdmin.select({ value: count() }).from(users),
+    dbAdmin.select({ value: count() }).from(subscriptions).where(eq(subscriptions.plan, 'pro')),
+    getMonthToDateAiUsage(),
+  ]);
 
   return {
     totalOrgs: orgCount?.value ?? 0,
     totalUsers: userCount?.value ?? 0,
     proSubscribers: proCount?.value ?? 0,
+    aiUsage: {
+      inputTokens: aiUsage.inputTokens,
+      outputTokens: aiUsage.outputTokens,
+      requestCount: aiUsage.requestCount,
+      // Estimated cost from month-to-date token totals against the default
+      // model's rate card. Treat as a rough operational signal, not an
+      // invoice — actual Anthropic billing depends on the model variant
+      // selected per request and any prompt caching discounts.
+      estimatedCostUsd: estimateClaudeCostUsd(aiUsage.inputTokens, aiUsage.outputTokens),
+    },
   };
 }
