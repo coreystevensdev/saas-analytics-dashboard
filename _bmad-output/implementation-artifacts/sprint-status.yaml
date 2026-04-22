@@ -1,4 +1,4 @@
-# generated: 2026-03-30
+# generated: 2026-04-22
 # project: SaaS Analytics Dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-03-30
+generated: 2026-04-22
 project: SaaS Analytics Dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -113,3 +113,14 @@ development_status:
   8-4-forward-cash-flow-forecast: done
   8-5-inline-chart-thumbnails-insight-mapping: done
   epic-8-retrospective: done
+
+  # ── Epic 9: Weekly Email Digest & Retention Loop ──
+  # GTM Week 3 target (2026-05-04 to 2026-05-10). Depends on Epic 8 stat types.
+  # Suggested order: 9.1 (infra) → 9.2 + 9.3 (parallel) → 9.4 → 9.5.
+  epic-9: backlog
+  9-1-email-infrastructure-provider-integration: backlog
+  9-2-weekly-digest-generator-bullmq-cron: backlog
+  9-3-digest-email-template-chart-snapshot: backlog
+  9-4-preferences-unsubscribe-can-spam-compliance: backlog
+  9-5-digest-observability-retention-metrics: backlog
+  epic-9-retrospective: optional

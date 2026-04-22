@@ -1518,3 +1518,258 @@ Extends `SeasonalProjection` to project net cash flow for the next 1–3 months.
 ### Story 8.5: Inline Chart Thumbnails + Insight-to-Chart Mapping
 
 Binds AI summary paragraphs to the dashboard charts that back them. The LLM emits `<stat id="..."/>` sentinel tokens inline; the client strips tags during SSE streaming, then post-stream parses them into paragraph-to-stat bindings, renders 180×120 thumbnails (desktop) or chips opening a bottom sheet (mobile), and opens a drill-down sheet with the filtered chart + pre-computed stat details. A Tier 2 validator extension catches hallucinated stat refs; the existing `ai_summaries` cache stays valid because stat IDs are stable. Reuses Story 4.1's `html-to-image` path so shared PNGs include thumbnails for free. Prompt version bumps `v1.3` → `v1.4` with a per-request stat-ID allowlist injected into the system prompt. Tech spec + 12-decision log at `_bmad-output/implementation-artifacts/8-5-inline-chart-thumbnails-insight-mapping.md`. Blocked by 8.2 (done) for the `/api/org/financials/cash-history` endpoint that powers the new `RunwayTrendChart`.
+
+## Epic 9: Weekly Email Digest & Retention Loop
+
+The first "product comes to you" surface. Shifts the interpretation layer from pull (owner logs in) to push (digest lands in inbox), which is the single biggest product differentiator vs. Fathom's accountant-first reporting tool. Consumes the cash-flow arc stat types from Epic 8 — burn direction, runway months, break-even, forecast — and turns them into a Sunday-evening summary that answers "what changed this week, and does it matter?" without requiring a dashboard visit.
+
+**Story progression:**
+1. **9.1 Email Infrastructure** (planned) — Resend integration, shared send-service, dev-mode console capture. Foundation for every email feature after this (digest, alerts, and — later — retroactive rewiring of invites and payment-failure emails).
+2. **9.2 Digest Generator + BullMQ Cron** (planned) — Sunday 18:00 UTC cron enqueues per-org digest jobs. Reuses curation pipeline; writes digest body into `ai_summaries` with `audience='digest-weekly'`.
+3. **9.3 Digest Template + Chart Snapshot** (planned) — React Email template, top-3 stats, single chart image via existing `html-to-image` path (Story 4.1 reuse). Pro = full body; Free = teaser + upgrade CTA (Epic 3.5 reuse).
+4. **9.4 Preferences, Unsubscribe & CAN-SPAM** (planned) — `/settings/email`, cadence enum, signed-token unsubscribe, List-Unsubscribe header, physical address. Legal requirement for any bulk mail.
+5. **9.5 Observability & Retention Metrics** (planned) — `digest_sent`/`digest_opened`/`digest_clicked` analytics events, admin dashboard view, Pino structured logs with org_id.
+
+**New architectural patterns introduced by this epic:**
+- **Email service abstraction** — `apps/api/src/services/email/` with provider interface (Resend primary, Postmark swap-ready), template registry, dev-mode console dump. Strictly additive — existing invite (Story 1.5) and payment-failure (Story 5.4) email paths are untouched. Retroactive unification deferred to an Epic 9 retro action item once the new service has real production usage.
+- **Digest audience tag on `ai_summaries`** — reuses existing cache table with an `audience` column extension. Same curation output, different framing; cache-first behavior unchanged. Stale-on-data-upload invalidation already handles it.
+- **Signed-token public actions pattern** — unsubscribe + preference updates without login. Reuses the HMAC-signed-token pattern from Story 4.2 (shareable links). One-click unsubscribe is mandatory under Gmail/Yahoo 2024 sender rules for senders > 5k messages/day, and CAN-SPAM requires it regardless.
+- **BullMQ cron job pattern** — first recurring job in the codebase. Establishes the pattern the QuickBooks sync spec will reuse (GTM Week 6).
+
+**Deferred to later epics:**
+- **Threshold-based proactive alerts** (GTM Week 4) — share 9.1's email infrastructure but have a different trigger shape (rule-based, not scheduled) and different UX (setup page, per-user rules). Separate epic.
+- **SMS delivery** — the GTM plan explicitly defers this post-PH launch. Email only for Epic 9.
+- **Accountant handoff digest (FR29–31)** — different audience (accountant, not owner), different framing, deferred until customer research confirms demand.
+- **Retroactive email unification** — invites and payment-failure emails stay on their current paths until Epic 9 ships and the new service has proven itself in production. Action item for Epic 9 retro.
+
+Depends on Epic 8 (stat types must exist). No new PRD requirements — FR29 ("proactive insight delivery") is satisfied by this epic. Blocks Epic 10 (alerts) on 9.1.
+
+### Story 9.1: Email Infrastructure & Provider Integration
+
+As a **platform operator**,
+I want a single email service with provider abstraction,
+So that every new transactional email in the system (digest, alerts, future features) flows through one observable path.
+
+**Acceptance Criteria:**
+
+**Given** the API boots in production
+**When** `EMAIL_PROVIDER=resend` and `RESEND_API_KEY` are set
+**Then** the email service initializes a Resend client and exposes `sendEmail({ to, subject, react, tags })`
+**And** every new transactional email introduced from Epic 9 onward routes through this service (never a raw SDK call from a route handler)
+
+**Given** the API boots in development or CI
+**When** `EMAIL_PROVIDER=console` (default for local + test)
+**Then** `sendEmail` writes the rendered template to Pino logs instead of calling a network provider
+**And** the send is a no-op at the network layer — no outbound HTTP, no API key required
+
+**Given** a transactional email fails (provider 5xx, network timeout, rate limit)
+**When** `sendEmail` is invoked
+**Then** the error is logged with structured context (`orgId`, `userId`, `template`, `provider`, `errorCode`) and a retryable error is thrown
+**And** BullMQ jobs retry with exponential backoff; synchronous sends surface the failure to the caller
+
+**Given** the provider abstraction design
+**When** a future Story swaps Resend for Postmark
+**Then** only one file changes (`apps/api/src/services/email/provider.ts` binding) — no template, no caller code, no test touches outside the provider module
+
+**Given** an operator inspects production logs
+**When** any email is sent
+**Then** a single log entry captures the full send path with correlation ID, template name, recipient org, and outcome (sent | failed | no-op)
+
+**Given** existing Epic 1 and Epic 5 email paths (invite email, payment-failure email)
+**When** Epic 9 ships
+**Then** those paths are untouched — no test changes, no behavior changes, no regression risk
+**And** a TODO comment in each existing path points to the Epic 9 retro action item for future unification
+
+**Technical Notes:**
+- `apps/api/src/services/email/provider.ts` — `EmailProvider` interface (matches `LlmProvider` pattern from hallucination-defense work). Implementations: `resend.ts`, `console.ts`, `postmark.ts` (deferred implementation, interface only).
+- `apps/api/src/services/email/index.ts` — `sendEmail(opts)` public API; template rendering via `@react-email/render`.
+- `apps/api/src/services/email/templates/` — React Email templates, colocated.
+- Env additions to `apps/api/src/config.ts`: `EMAIL_PROVIDER` enum (`resend`|`console`|`postmark`), `RESEND_API_KEY` optional, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`, `EMAIL_MAILING_ADDRESS`. Zod-validated, fail-fast when provider is `resend` but API key missing.
+- Dependencies: `resend@^4.x`, `@react-email/components@^0.x`, `@react-email/render@^1.x`.
+- Cost ceiling: Resend free tier = 3k/month. GTM plan line 326 budgets $0-20/mo through Week 12.
+
+### Story 9.2: Weekly Digest Generator & BullMQ Cron
+
+As a **small business owner on Pro**,
+I want a weekly summary of what changed in my business delivered to my inbox,
+So that I stay on top of my numbers without opening the dashboard every week.
+
+**Acceptance Criteria:**
+
+**Given** the API boots
+**When** the BullMQ worker initializes
+**Then** a `digest-weekly` repeatable job registers with cron `0 18 * * 0` (Sunday 18:00 UTC)
+**And** a second enqueue of the same job is idempotent (BullMQ dedupes by repeat key)
+
+**Given** the Sunday cron fires
+**When** the orchestrator runs
+**Then** it pages through every org with an active Pro subscription AND at least one dataset uploaded in the last 30 days
+**And** enqueues one `digest-org` job per eligible org with `{ orgId, weekStart, weekEnd }`
+**And** the pagination is a single SQL query (no per-org fan-out from the DB)
+
+**Given** a per-org digest job runs
+**When** the curation pipeline executes for that org
+**Then** the pipeline computes against the org's latest active dataset within the `[weekEnd - 30d, weekEnd]` window
+**And** the top-N scored stats pass through assembly with `audience='digest-weekly'` — a new prompt variant that produces 3–5 bullets instead of paragraphs
+**And** the result writes to `ai_summaries` with `audience='digest-weekly'` and a composite cache key `{orgId, datasetId, audience, weekStart}`
+
+**Given** a digest job has already run for an org within the last 6 days
+**When** the cron fires again (manual re-run, cron drift, retry)
+**Then** the job exits early without re-computing or re-sending — `lastSentAt` on `digest_preferences` gates delivery
+
+**Given** the curation pipeline errors mid-job (LLM timeout, DB outage)
+**When** the per-org job fails
+**Then** BullMQ retries with exponential backoff up to 3 times, then fails the job with full error context logged
+**And** one org's failure never blocks other orgs in the batch (per-org jobs are independent)
+
+**Given** an org has the `off` cadence in `digest_preferences`
+**When** the orchestrator enumerates eligible orgs
+**Then** that org is skipped at the SQL level — no job is enqueued, no cost is incurred
+
+**Given** the privacy boundary from Story 3.1
+**When** the digest generator runs
+**Then** assembly receives `ComputedStat[]` only — raw `DataRow[]` never crosses the boundary (NFR12)
+
+**Technical Notes:**
+- New BullMQ queue `digest-weekly` + worker in `apps/api/src/jobs/digest/`.
+- New prompt variant `v1.5` in `curation/config/prompts/` — adds `audience=digest-weekly` branch returning 3–5 bullets with the legal posture carry-over from `v1.md`.
+- `ai_summaries.audience` column extension: `'dashboard' | 'digest-weekly' | 'share'`. Migration preserves existing rows (default `'dashboard'`).
+- Eligibility query: single JOIN across `orgs`, `subscriptions` (status=active, tier=pro), `datasets` (uploadedAt >= now - 30d), `digest_preferences` (cadence='weekly' or NULL). Paginated via `LIMIT/OFFSET` or cursor.
+- Tier 1 hallucination validator runs on digest output same as dashboard summaries.
+- Metrics: job duration histogram, per-org success/failure counter, queue depth gauge — via the metrics endpoint shipped in Epic 7 hardening.
+
+### Story 9.3: Digest Email Template & Chart Snapshot
+
+As a **small business owner on Pro**,
+I want the digest to look clean and show one chart that makes the numbers visual,
+So that I can absorb the key signal in under 30 seconds.
+
+**Acceptance Criteria:**
+
+**Given** a digest job reaches the send step
+**When** the email renders
+**Then** the template uses React Email components with inline styles (MSO + Gmail + Apple Mail compatible)
+**And** the layout is a single-column 600px container — mobile-first, no media queries required
+**And** the visual language matches the dashboard (Inter typography, brand color palette, dark-on-light)
+
+**Given** the digest body renders
+**When** the template composes
+**Then** the top block is one chart snapshot (revenue trend OR biggest-mover stat — chosen by scoring)
+**And** below the chart are 3–5 stat bullets rendered from the curation output
+**And** the footer has a `See full dashboard →` CTA deep-linking to `/dashboard?datasetId=X`
+
+**Given** the chart snapshot generates
+**When** the template needs the image
+**Then** the existing `html-to-image` path from Story 4.1 renders the chart to PNG server-side
+**And** the PNG is inlined as a `data:` URL (for simplicity) or uploaded to a CDN and referenced by URL (decide per image size — target ≤ 200kb)
+
+**Given** a free-tier user receives a digest
+**When** the template composes
+**Then** only the first bullet is shown in full; remaining bullets are blurred with an "Upgrade to see the rest" CTA
+**And** the visual pattern matches Epic 3 Story 3.5 (free-preview-with-upgrade-cta)
+**And** the CTA links to `/billing` with a UTM-tagged URL (`utm_source=digest&utm_medium=email&utm_campaign=upgrade-from-free`)
+
+**Given** the LLM generates digest bullets
+**When** the framing is applied
+**Then** each bullet follows the legal posture from `v1.md`: "spent $X more than you earned" is fine; "you should cut costs" is never fine
+**And** the footer includes the standard disclaimer ("Information only. Not financial advice. Consult your accountant for decisions.")
+
+**Given** the CAN-SPAM footer requirements
+**When** any digest email sends
+**Then** the footer includes: physical mailing address, one-click unsubscribe link, and a plaintext "You're receiving this because you're a Pro subscriber at [org name]"
+**And** the email has a `List-Unsubscribe` header with both `mailto:` and HTTPS values (Gmail/Yahoo 2024 sender rules)
+
+**Technical Notes:**
+- Template at `apps/api/src/services/email/templates/digest-weekly.tsx`. React Email + Tailwind-via-inline-styles (no runtime CSS).
+- Chart rendering: reuse `renderChartToImage()` from Story 4.1's share path; no new path, no new DPI math.
+- UTM params centralized in `packages/shared/constants/utm.ts` for consistency across digest CTAs and future alert CTAs.
+- Physical address sourced from `EMAIL_MAILING_ADDRESS` env var (CAN-SPAM requires real address; use business registered agent address or home office, not P.O. box unless registered).
+- Preview snapshot tests: render to HTML, check structure + required footer elements. Visual regression via Percy/Chromatic deferred.
+
+### Story 9.4: Preferences, Unsubscribe & CAN-SPAM Compliance
+
+As a **user**,
+I want to control what emails I receive and unsubscribe in one click if I don't want them,
+So that the product earns inbox trust and complies with email law.
+
+**Acceptance Criteria:**
+
+**Given** a user visits `/settings/email`
+**When** the page loads
+**Then** they see their current preferences: digest cadence (weekly | monthly | off), preferred send day (Sunday default), timezone
+**And** changes save via `PUT /api/user/email-preferences` and reflect on the next cron tick
+
+**Given** a user clicks the unsubscribe link in a digest email
+**When** the browser hits `/unsubscribe?token=...`
+**Then** the HMAC-signed token is verified (same pattern as Story 4.2's share links)
+**And** the user's `digest_preferences.cadence` sets to `off` without requiring login
+**And** a confirmation page shows "You've been unsubscribed" with a "Resubscribe" link
+**And** the action is idempotent (clicking the link twice is a no-op)
+
+**Given** a user clicks the `List-Unsubscribe` mailto link (some clients auto-send the mailto)
+**When** the server's dedicated unsubscribe inbox receives it
+**Then** cadence sets to `off` by parsing the `From:` header and matching the user's email
+**(If mailto-based unsubscribe is more infrastructure than warranted for GTM Week 3, ship HTTPS-only and set the mailto fallback to a monitored inbox — documented in the tech spec.)**
+
+**Given** the digest send path
+**When** any email goes out
+**Then** the `List-Unsubscribe` header contains both HTTPS (`<https://app.example/unsubscribe?token=...>`) and mailto (`<mailto:unsubscribe@example.com>`) values, comma-separated
+**And** the `List-Unsubscribe-Post` header is `List-Unsubscribe=One-Click` (Gmail/Yahoo 2024 requirement)
+
+**Given** the `digest_preferences` table
+**When** migrations run
+**Then** the table exists with: `userId` (FK to users, PK), `cadence` enum (weekly|monthly|off, default weekly), `timezone` text (default UTC), `lastSentAt` timestamp nullable, `unsubscribedAt` timestamp nullable, `createdAt`, `updatedAt`
+**And** RLS policy restricts reads/writes to the owning user (`user_id = current_user_id()`), matching the Story 7.6 pattern
+
+**Given** an admin reviews compliance
+**When** they check the admin dashboard
+**Then** the system-health view shows: total Pro users, unsubscribe rate (7d/30d), bounce rate, spam-complaint rate (pulled from Resend webhooks)
+
+**Technical Notes:**
+- Migration adds `digest_preferences` table with RLS enabled.
+- Unsubscribe token: HMAC-SHA256 over `{userId, issuedAt}` with `UNSUBSCRIBE_HMAC_SECRET` env var. Token lifetime = indefinite (unsubscribe links in old emails must keep working).
+- Resend webhook handler (`POST /api/webhooks/resend`) captures bounce + complaint events into `analytics_events` for admin reporting.
+- `packages/shared/schemas/email-preferences.ts` — Zod 3.x.
+- Physical mailing address env var is validated at boot (config.ts fails fast if missing when `EMAIL_PROVIDER=resend`).
+
+### Story 9.5: Digest Observability & Retention Metrics
+
+As a **platform operator**,
+I want to see digest send volume, open rate, click-through rate, and unsubscribe rate,
+So that I can measure whether the "product comes to you" loop is driving retention.
+
+**Acceptance Criteria:**
+
+**Given** a digest job completes a send
+**When** the send succeeds
+**Then** an analytics event `digest_sent` is written with `{ userId, orgId, datasetId, weekStart, templateVersion }`
+
+**Given** a recipient opens a digest email
+**When** the 1x1 tracking pixel loads
+**Then** an analytics event `digest_opened` is written with `{ userId, orgId, weekStart, userAgent, openedAt }`
+**And** opens are counted at-most-once per digest per recipient (idempotent by `{userId, weekStart}`)
+
+**Given** a recipient clicks any link in the digest
+**When** the click lands on the app
+**Then** the UTM params are captured and an analytics event `digest_clicked` is written with `{ userId, orgId, weekStart, utmCampaign, destination }`
+
+**Given** the admin dashboard loads
+**When** the platform admin views the digest metrics section
+**Then** they see: total digests sent this week, open rate (7d/30d), click-through rate (7d/30d), unsubscribe rate (7d/30d)
+**And** the view respects RLS — only `users.is_platform_admin=true` can read it
+
+**Given** a per-org dashboard widget
+**When** an owner loads their dashboard
+**Then** a small "Last digest sent [relative date]" indicator appears near the AI summary card — low-visibility confirmation that the loop is working
+
+**Given** the digest pipeline is observed in production
+**When** any job runs
+**Then** Pino structured logs capture `correlation_id`, `org_id`, `user_id`, `template_version`, `duration_ms`, and outcome
+**And** Sentry tags attach `org_id` and `template_version` for filterability (pattern from commit `4c51140`)
+
+**Technical Notes:**
+- New analytics event types: `DIGEST_SENT`, `DIGEST_OPENED`, `DIGEST_CLICKED`. Added to `packages/shared/constants/analytics.ts`.
+- Tracking pixel endpoint: `GET /api/track/digest/open?t={signedToken}` — signed to prevent spoofing, returns 1x1 GIF.
+- Click tracking: UTM params in every CTA are captured by existing analytics middleware (no new infrastructure).
+- Admin view is a new tab on `/admin/analytics` — reuses Epic 6 patterns.
+- Open-rate caveat: Apple Mail Privacy Protection pre-fetches images, inflating open rates. Documented on the admin view as a known bias.
