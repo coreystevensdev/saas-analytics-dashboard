@@ -3,6 +3,27 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const AI_TIMEOUT_MS = 15_000; // 15s total, TTFT < 2s
 export const FREE_PREVIEW_WORD_LIMIT = 50;
 
+// Anthropic API pricing per 1M tokens (Sonnet 4.5 default — model configured
+// via CLAUDE_MODEL env var, defaulting to claude-sonnet-4-5-20250929). These
+// are estimates for the admin dashboard cost tile — NOT billing. Update when
+// the default model changes or Anthropic publishes new rates.
+export const CLAUDE_PRICING = {
+  'claude-sonnet-4-5-20250929': { inputPerMillion: 3, outputPerMillion: 15 },
+  'claude-haiku-4-5-20251001': { inputPerMillion: 1, outputPerMillion: 5 },
+  'claude-opus-4-7': { inputPerMillion: 15, outputPerMillion: 75 },
+} as const;
+
+export const DEFAULT_CLAUDE_MODEL_ID = 'claude-sonnet-4-5-20250929' as const;
+
+export function estimateClaudeCostUsd(
+  inputTokens: number,
+  outputTokens: number,
+  modelId: keyof typeof CLAUDE_PRICING = DEFAULT_CLAUDE_MODEL_ID,
+): number {
+  const rates = CLAUDE_PRICING[modelId];
+  return (inputTokens * rates.inputPerMillion + outputTokens * rates.outputPerMillion) / 1_000_000;
+}
+
 export const RATE_LIMITS = {
   auth: { max: 10, windowMs: 60_000 },
   ai: { max: 5, windowMs: 60_000 },

@@ -6,11 +6,19 @@ import { Building2, Users, CreditCard } from 'lucide-react';
 import { AdminOrgTable } from './AdminOrgTable';
 import { AdminUserTable } from './AdminUserTable';
 import { SystemHealthPanel } from './SystemHealthPanel';
+import { AiUsageTile } from './AiUsageTile';
 import type { AdminOrgRow, AdminUserRow, AdminStats } from './types';
+
+const EMPTY_STATS: AdminStats = {
+  totalOrgs: 0,
+  totalUsers: 0,
+  proSubscribers: 0,
+  aiUsage: { inputTokens: 0, outputTokens: 0, requestCount: 0, estimatedCostUsd: 0 },
+};
 
 async function fetchAdminOrgs(cookieHeader: string) {
   const res = await apiServer<AdminOrgRow[]>('/admin/orgs', { cookies: cookieHeader });
-  return { orgs: res.data, stats: (res.meta?.stats as AdminStats) ?? { totalOrgs: 0, totalUsers: 0, proSubscribers: 0 } };
+  return { orgs: res.data, stats: (res.meta?.stats as AdminStats) ?? EMPTY_STATS };
 }
 
 async function fetchAdminUsers(cookieHeader: string) {
@@ -33,7 +41,7 @@ export default async function AdminPage() {
     <div className="space-y-6 p-4 md:p-6 lg:p-8">
       <h1 className="text-2xl font-semibold tracking-tight">Platform Admin</h1>
 
-      <div className="grid gap-4 md:grid-cols-3" role="group" aria-label="Platform statistics">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" role="group" aria-label="Platform statistics">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Organizations</CardTitle>
@@ -69,6 +77,8 @@ export default async function AdminPage() {
             </div>
           </CardContent>
         </Card>
+
+        <AiUsageTile usage={stats.aiUsage} />
       </div>
 
       <SystemHealthPanel />

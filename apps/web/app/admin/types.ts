@@ -21,6 +21,14 @@ export interface AdminStats {
   totalOrgs: number;
   totalUsers: number;
   proSubscribers: number;
+  aiUsage: AiUsageStats;
+}
+
+export interface AiUsageStats {
+  inputTokens: number;
+  outputTokens: number;
+  requestCount: number;
+  estimatedCostUsd: number;
 }
 
 export interface AnalyticsEventRow {

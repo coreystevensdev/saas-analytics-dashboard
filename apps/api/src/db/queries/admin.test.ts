@@ -49,6 +49,12 @@ vi.mock('../schema.js', () => ({
   userOrgs: { userId: 'userOrgs.userId', orgId: 'userOrgs.orgId', role: 'userOrgs.role', joinedAt: 'userOrgs.joinedAt' },
   datasets: { id: 'datasets.id', name: 'datasets.name', orgId: 'datasets.orgId', isSeedData: 'datasets.isSeedData', createdAt: 'datasets.createdAt' },
   subscriptions: { plan: 'subscriptions.plan', status: 'subscriptions.status', orgId: 'subscriptions.orgId' },
+  analyticsEvents: { id: 'ae.id', orgId: 'ae.orgId', eventName: 'ae.eventName', metadata: 'ae.metadata', createdAt: 'ae.createdAt' },
+}));
+
+const mockGetMonthToDateAiUsage = vi.fn();
+vi.mock('./analyticsEvents.js', () => ({
+  getMonthToDateAiUsage: mockGetMonthToDateAiUsage,
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -150,16 +156,43 @@ describe('admin queries', () => {
   });
 
   describe('getAdminStats', () => {
-    it('returns aggregate counts', async () => {
-      // Three separate select...from calls, each resolving via the where/from chain
+    it('returns aggregate counts plus month-to-date AI usage with estimated cost', async () => {
       mockFrom.mockResolvedValueOnce([{ value: 5 }]);
       mockFrom.mockResolvedValueOnce([{ value: 12 }]);
       mockWhere.mockResolvedValueOnce([{ value: 3 }]);
+      mockGetMonthToDateAiUsage.mockResolvedValueOnce({
+        inputTokens: 500_000,
+        outputTokens: 100_000,
+        requestCount: 42,
+      });
 
       const { getAdminStats } = await import('./admin.js');
       const result = await getAdminStats();
 
-      expect(result).toEqual({ totalOrgs: 5, totalUsers: 12, proSubscribers: 3 });
+      expect(result.totalOrgs).toBe(5);
+      expect(result.totalUsers).toBe(12);
+      expect(result.proSubscribers).toBe(3);
+      expect(result.aiUsage.inputTokens).toBe(500_000);
+      expect(result.aiUsage.outputTokens).toBe(100_000);
+      expect(result.aiUsage.requestCount).toBe(42);
+      // 500k × $3/M + 100k × $15/M = $1.50 + $1.50 = $3.00 (Sonnet 4.5 default)
+      expect(result.aiUsage.estimatedCostUsd).toBeCloseTo(3.0, 2);
+    });
+
+    it('returns $0.00 cost when no AI requests happened this month', async () => {
+      mockFrom.mockResolvedValueOnce([{ value: 0 }]);
+      mockFrom.mockResolvedValueOnce([{ value: 0 }]);
+      mockWhere.mockResolvedValueOnce([{ value: 0 }]);
+      mockGetMonthToDateAiUsage.mockResolvedValueOnce({
+        inputTokens: 0,
+        outputTokens: 0,
+        requestCount: 0,
+      });
+
+      const { getAdminStats } = await import('./admin.js');
+      const result = await getAdminStats();
+
+      expect(result.aiUsage.estimatedCostUsd).toBe(0);
     });
   });
 });
