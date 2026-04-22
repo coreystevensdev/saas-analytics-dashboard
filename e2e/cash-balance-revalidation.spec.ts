@@ -87,21 +87,23 @@ test.describe('saveCashBalance revalidation', () => {
     const input = page.getByLabel(/current cash balance/i);
     await input.fill('50000');
 
+    // Confirm the button is enabled (valid state inside LockedInsightCard)
+    // but don't click it. The button flips to `disabled` synchronously when
+    // handleSubmit fires, and Playwright's click-retry mechanics race with
+    // that state change unpredictably — earlier attempts with force:true
+    // swallowed the actual DOM submit event. Pressing Enter on the input
+    // dispatches a native `submit` on the form, which React's onSubmit
+    // handler picks up cleanly. More realistic user behavior, too.
     const saveButton = page.getByRole('button', { name: /^save$/i });
     await expect(saveButton).toBeEnabled({ timeout: 5_000 });
 
-    // Wait for the PUT response alongside the click so we can assert the
-    // save reached the server and succeeded. `force: true` bypasses
-    // Playwright's post-click actionability re-check — LockedInsightCard
-    // flips the button to `disabled` synchronously when submit fires, and
-    // the re-check otherwise retries until test timeout.
     const [putResponse] = await Promise.all([
       page.waitForResponse(
         (resp) =>
           resp.url().includes('/api/org/financials') && resp.request().method() === 'PUT',
         { timeout: 10_000 },
       ),
-      saveButton.click({ force: true }),
+      input.press('Enter'),
     ]);
     expect(putResponse.status()).toBe(200);
 
