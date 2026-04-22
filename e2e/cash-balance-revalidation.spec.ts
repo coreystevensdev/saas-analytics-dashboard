@@ -83,12 +83,17 @@ test.describe('saveCashBalance revalidation', () => {
     await input.fill('50000');
 
     const saveButton = page.getByRole('button', { name: /^save$/i });
-    // Wait for `valid` to flip true inside LockedInsightCard — the button
-    // is `disabled={!valid || submitting}`. Playwright's auto-retry on
-    // click times out at 30s if the button stays disabled, which is what
-    // we were seeing in CI before this wait.
     await expect(saveButton).toBeEnabled({ timeout: 5_000 });
-    await saveButton.click();
+
+    // Use `force: true` to bypass Playwright's re-check of actionability at
+    // click time. LockedInsightCard.handleSubmit sets `submitting = true`
+    // synchronously when the form handler fires, which flips the button to
+    // `disabled`. Playwright's retry logic sees the disabled state mid-click
+    // and keeps retrying until the 30s test timeout — even though the submit
+    // actually started. The toBeEnabled check above guards against clicking
+    // a button that was always disabled; force: true bypasses the redundant
+    // post-click re-check.
+    await saveButton.click({ force: true });
 
     // After the Promise.all resolves, financials revalidates → needsCashBalance
     // flips false → LockedInsightCard unmounts. If any SWR key is left stale
