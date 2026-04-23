@@ -1526,7 +1526,7 @@ The first "product comes to you" surface. Shifts the interpretation layer from p
 **Story progression:**
 1. **9.1 Email Infrastructure** (planned) — Resend integration, shared send-service, dev-mode console capture. Foundation for every email feature after this (digest, alerts, and — later — retroactive rewiring of invites and payment-failure emails).
 2. **9.2 Digest Generator + BullMQ Cron** (planned) — Sunday 18:00 UTC cron enqueues per-org digest jobs. Reuses curation pipeline; writes digest body into `ai_summaries` with `audience='digest-weekly'`.
-3. **9.3 Digest Template + Chart Snapshot** (planned) — React Email template, top-3 stats, single chart image via existing `html-to-image` path (Story 4.1 reuse). Pro = full body; Free = teaser + upgrade CTA (Epic 3.5 reuse).
+3. **9.3 Digest Template** (planned) — React Email template, top-3 stats as text bullets. Pro-only at launch (free-tier eligibility deferred per sprint-planning decision A). Chart snapshot deferred to Epic 10 alerts infrastructure per decision B — Story 4.1's `renderChartToImage()` is browser-only and doesn't transplant to a BullMQ worker.
 4. **9.4 Preferences, Unsubscribe & CAN-SPAM** (planned) — `/settings/email`, cadence enum, signed-token unsubscribe, List-Unsubscribe header, physical address. Legal requirement for any bulk mail.
 5. **9.5 Observability & Retention Metrics** (planned) — `digest_sent`/`digest_opened`/`digest_clicked` analytics events, admin dashboard view, Pino structured logs with org_id.
 
@@ -1541,6 +1541,9 @@ The first "product comes to you" surface. Shifts the interpretation layer from p
 - **SMS delivery** — the GTM plan explicitly defers this post-PH launch. Email only for Epic 9.
 - **Accountant handoff digest (FR29–31)** — different audience (accountant, not owner), different framing, deferred until customer research confirms demand.
 - **Retroactive email unification** — invites and payment-failure emails stay on their current paths until Epic 9 ships and the new service has proven itself in production. Action item for Epic 9 retro.
+- **Free-tier digest** (sprint-planning decision A) — Pro-only at launch. Reconsider as a Week 5 monthly-cadence acquisition experiment if conversion metrics stall. Adding later is a single SQL change to the 9.2 eligibility query. Action item for Epic 9 retro.
+- **Chart snapshot in digest** (sprint-planning decision B) — text-only at launch. Server-side chart rendering infrastructure will land in Epic 10 (alerts) — at that point, retrofit 9.3 to include a chart image. Action item for Epic 9 retro.
+- **Per-org digest cadence** (sprint-planning decision C) — `digest_preferences` uses `user_id` as PK; multi-org users get one cadence across all orgs. Revisit as a `(user_id, org_id)` composite PK migration if multi-org customer feedback demands per-org control. Action item for Epic 9 retro.
 
 Depends on Epic 8 (stat types must exist). No new PRD requirements — FR29 ("proactive insight delivery") is satisfied by this epic. Blocks Epic 10 (alerts) on 9.1.
 
@@ -1634,14 +1637,14 @@ So that I stay on top of my numbers without opening the dashboard every week.
 - New BullMQ queue `digest-weekly` + worker in `apps/api/src/jobs/digest/`.
 - New prompt variant `v1.5` in `curation/config/prompts/` — adds `audience=digest-weekly` branch returning 3–5 bullets with the legal posture carry-over from `v1.md`.
 - `ai_summaries.audience` column extension: `'dashboard' | 'digest-weekly' | 'share'`. Migration preserves existing rows (default `'dashboard'`).
-- Eligibility query: single JOIN across `orgs`, `subscriptions` (status=active, tier=pro), `datasets` (uploadedAt >= now - 30d), `digest_preferences` (cadence='weekly' or NULL). Paginated via `LIMIT/OFFSET` or cursor.
+- **Pro-only at launch per sprint-planning decision A** — retention loop thesis, not acquisition. Eligibility query: single JOIN across `orgs`, `subscriptions` (status=active, tier=pro), `datasets` (uploadedAt >= now - 30d), `digest_preferences` (cadence='weekly' or NULL). Paginated via `LIMIT/OFFSET` or cursor. Free-tier monthly teaser deferred as potential Week 5 acquisition experiment.
 - Tier 1 hallucination validator runs on digest output same as dashboard summaries.
 - Metrics: job duration histogram, per-org success/failure counter, queue depth gauge — via the metrics endpoint shipped in Epic 7 hardening.
 
-### Story 9.3: Digest Email Template & Chart Snapshot
+### Story 9.3: Digest Email Template
 
 As a **small business owner on Pro**,
-I want the digest to look clean and show one chart that makes the numbers visual,
+I want the digest to show me the top signals as scannable bullets,
 So that I can absorb the key signal in under 30 seconds.
 
 **Acceptance Criteria:**
@@ -1654,20 +1657,8 @@ So that I can absorb the key signal in under 30 seconds.
 
 **Given** the digest body renders
 **When** the template composes
-**Then** the top block is one chart snapshot (revenue trend OR biggest-mover stat — chosen by scoring)
-**And** below the chart are 3–5 stat bullets rendered from the curation output
-**And** the footer has a `See full dashboard →` CTA deep-linking to `/dashboard?datasetId=X`
-
-**Given** the chart snapshot generates
-**When** the template needs the image
-**Then** the existing `html-to-image` path from Story 4.1 renders the chart to PNG server-side
-**And** the PNG is inlined as a `data:` URL (for simplicity) or uploaded to a CDN and referenced by URL (decide per image size — target ≤ 200kb)
-
-**Given** a free-tier user receives a digest
-**When** the template composes
-**Then** only the first bullet is shown in full; remaining bullets are blurred with an "Upgrade to see the rest" CTA
-**And** the visual pattern matches Epic 3 Story 3.5 (free-preview-with-upgrade-cta)
-**And** the CTA links to `/billing` with a UTM-tagged URL (`utm_source=digest&utm_medium=email&utm_campaign=upgrade-from-free`)
+**Then** the body is 3–5 stat bullets rendered from the curation output, in scoring order
+**And** the footer has a `See full dashboard →` CTA deep-linking to `/dashboard?datasetId=X` with UTM params (`utm_source=digest&utm_medium=email&utm_campaign=weekly-digest`)
 
 **Given** the LLM generates digest bullets
 **When** the framing is applied
@@ -1681,7 +1672,7 @@ So that I can absorb the key signal in under 30 seconds.
 
 **Technical Notes:**
 - Template at `apps/api/src/services/email/templates/digest-weekly.tsx`. React Email + Tailwind-via-inline-styles (no runtime CSS).
-- Chart rendering: reuse `renderChartToImage()` from Story 4.1's share path; no new path, no new DPI math.
+- **Text-only at launch per sprint-planning decision B.** Story 4.1's `renderChartToImage()` is browser-only (`html-to-image` + Canvas API, both DOM-dependent) and doesn't transplant to a BullMQ worker. Server-side chart rendering will land in Epic 10 (alerts); retrofit the digest template then.
 - UTM params centralized in `packages/shared/constants/utm.ts` for consistency across digest CTAs and future alert CTAs.
 - Physical address sourced from `EMAIL_MAILING_ADDRESS` env var (CAN-SPAM requires real address; use business registered agent address or home office, not P.O. box unless registered).
 - Preview snapshot tests: render to HTML, check structure + required footer elements. Visual regression via Percy/Chromatic deferred.
@@ -1727,6 +1718,7 @@ So that the product earns inbox trust and complies with email law.
 
 **Technical Notes:**
 - Migration adds `digest_preferences` table with RLS enabled.
+- **Scoping per sprint-planning decision C** — `digest_preferences` uses `user_id` as PK (one preference row per user across all orgs). This intentionally breaks the "org_id on every table" rule because email is user-scoped in the real world (one inbox per user, one unsubscribe click = stop everything). RLS policy: `user_id = current_user_id()`. Per-org cadence deferred; if multi-org customer feedback demands it, migrate to `(user_id, org_id)` composite PK via additive change.
 - Unsubscribe token: HMAC-SHA256 over `{userId, issuedAt}` with `UNSUBSCRIBE_HMAC_SECRET` env var. Token lifetime = indefinite (unsubscribe links in old emails must keep working).
 - Resend webhook handler (`POST /api/webhooks/resend`) captures bounce + complaint events into `analytics_events` for admin reporting.
 - `packages/shared/schemas/email-preferences.ts` — Zod 3.x.

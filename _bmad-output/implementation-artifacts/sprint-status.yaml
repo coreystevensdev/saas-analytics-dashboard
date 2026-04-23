@@ -1,4 +1,4 @@
-# generated: 2026-04-22
+# generated: 2026-04-23
 # project: SaaS Analytics Dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-04-22
+generated: 2026-04-23
 project: SaaS Analytics Dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -117,10 +117,19 @@ development_status:
   # ── Epic 9: Weekly Email Digest & Retention Loop ──
   # GTM Week 3 target (2026-05-04 to 2026-05-10). Depends on Epic 8 stat types.
   # Suggested order: 9.1 (infra) → 9.2 + 9.3 (parallel) → 9.4 → 9.5.
+  #
+  # Sprint-planning decisions resolved 2026-04-23 — see epics.md for full rationale:
+  #   [A] Pro-only eligibility at launch (retention loop, not acquisition).
+  #       Free-tier digest deferred to Epic 9 retro.
+  #   [B] Text-only digest at launch. Chart snapshot deferred to Epic 10 alerts —
+  #       Story 4.1's renderChartToImage() is browser-only; server-side rendering
+  #       infra will land with alerts and retrofit here.
+  #   [C] digest_preferences uses user_id as PK (one pref per user, all orgs).
+  #       Per-org cadence deferred to Epic 9 retro if multi-org feedback demands it.
   epic-9: backlog
   9-1-email-infrastructure-provider-integration: backlog
   9-2-weekly-digest-generator-bullmq-cron: backlog
-  9-3-digest-email-template-chart-snapshot: backlog
+  9-3-digest-email-template: backlog
   9-4-preferences-unsubscribe-can-spam-compliance: backlog
   9-5-digest-observability-retention-metrics: backlog
   epic-9-retrospective: optional
