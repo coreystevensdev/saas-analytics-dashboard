@@ -245,12 +245,12 @@ First 3–5 deploys are manual — provider-specific issues (build minutes, secr
 
 - [ ] Task 5: Create Railway project and connect GitHub
   - File: none (Railway dashboard)
-  - Action: New project → Deploy from GitHub repo `CoreyStevensDev/saas-analytics-dashboard`. Select `main` branch. Railway auto-detects `Dockerfile.api` if root path is `.`; explicitly set build to use `Dockerfile.api`. Set region to `us-east`. Set service name `api`. Leave auto-deploy OFF initially (Task 11 wires it up after first manual deploy succeeds).
+  - Action: New project → Deploy from GitHub repo `coreystevensdev/saas-analytics-dashboard`. Select `main` branch. Railway auto-detects `Dockerfile.api` if root path is `.`; explicitly set build to use `Dockerfile.api`. Set region to `us-east`. Set service name `api`. Leave auto-deploy OFF initially (Task 11 wires it up after first manual deploy succeeds).
   - Notes: Railway's "Deploy from Dockerfile" path matters — `Dockerfile.api` lives at repo root. Railway injects `PORT`; `config.ts` picks it up via `z.coerce.number().default(3001)`.
 
 - [ ] Task 6: Create Vercel project and connect GitHub
   - File: none (Vercel dashboard)
-  - Action: Import Git repo `CoreyStevensDev/saas-analytics-dashboard`. Framework preset: Next.js. Root directory: `apps/web`. Build command: leave default (`next build`). Install command: `pnpm install --frozen-lockfile` (Vercel auto-detects pnpm from `pnpm-lock.yaml`). Set region to `us-east` (iad1 or equivalent).
+  - Action: Import Git repo `coreystevensdev/saas-analytics-dashboard`. Framework preset: Next.js. Root directory: `apps/web`. Build command: leave default (`next build`). Install command: `pnpm install --frozen-lockfile` (Vercel auto-detects pnpm from `pnpm-lock.yaml`). Set region to `us-east` (iad1 or equivalent).
   - Notes: Vercel's monorepo detection handles `apps/web` — it won't build the API. Turborepo integration is automatic. Do NOT deploy yet — no env vars set.
 
 **Phase 3 — DNS and secrets prep**
@@ -374,7 +374,7 @@ First 3–5 deploys are manual — provider-specific issues (build minutes, secr
 
 - [~] Task 20: Update README with production URL + deploy badge (placeholder in place; real URL swap deferred to post-Task 14)
   - File: `README.md`
-  - Action: Add production URL link near the top (under tagline). Add GitHub Actions deploy badge: `![Deploy](https://github.com/CoreyStevensDev/saas-analytics-dashboard/actions/workflows/ci.yml/badge.svg?branch=main)`. Keep existing clone-and-run section — local dev remains the quick-start path.
+  - Action: Add production URL link near the top (under tagline). Add GitHub Actions deploy badge: `![Deploy](https://github.com/coreystevensdev/saas-analytics-dashboard/actions/workflows/ci.yml/badge.svg?branch=main)`. Keep existing clone-and-run section — local dev remains the quick-start path.
   - Notes: The badge is cosmetic signaling — it tells hiring managers the project is actively maintained and deployed, not just working locally.
 
 - [x] Task 21: Check off completed items in deployment-roadmap.md
