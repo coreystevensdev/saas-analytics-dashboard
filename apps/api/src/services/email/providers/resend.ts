@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { render } from '@react-email/components';
+import { render } from '@react-email/render';
 import { Resend } from 'resend';
 
 import type { Env } from '../../../config.js';

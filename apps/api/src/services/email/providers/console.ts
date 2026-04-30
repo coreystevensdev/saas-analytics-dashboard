@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promises as fsPromises } from 'node:fs';
 
-import { render } from '@react-email/components';
+import { render } from '@react-email/render';
 
 import type { Env } from '../../../config.js';
 import { logger as defaultLogger } from '../../../lib/logger.js';
