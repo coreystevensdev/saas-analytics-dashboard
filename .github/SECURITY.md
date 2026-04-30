@@ -26,5 +26,3 @@ TellSight is a multi-tenant SaaS application with several security-relevant surf
 - **Stripe webhook handling.** Webhook signature verification is required before any billing-state mutation. Reports about replay, signature bypass, or state-corruption via crafted events are in scope.
 - **SSE channel abuse.** The AI summary streams over Server-Sent Events. Cross-tenant subscription, summary-stream poisoning, or rate-limit bypass on the SSE handler are in scope.
 - **Demo-mode escape.** Demo mode is a deliberately-permissive read path with cached AI summary. Reports where demo mode grants access beyond its intended scope are welcome.
-
-The `_bmad-output/planning-artifacts/architecture.md` file documents the security boundaries in detail and is the canonical reference for what is in scope.
