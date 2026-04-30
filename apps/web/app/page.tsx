@@ -302,7 +302,7 @@ export default function LandingPage() {
               <p>
                 The prompt-assembly function in{' '}
                 <a
-                  href="https://github.com/coreystevensdev/saas-analytics-dashboard/blob/main/apps/api/src/services/curation/assembly.ts"
+                  href="https://github.com/coreystevensdev/tellsight/blob/main/apps/api/src/services/curation/assembly.ts"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-mono text-xs underline underline-offset-4 hover:text-primary"
@@ -324,7 +324,7 @@ export default function LandingPage() {
               <p>
                 Side benefit of the same boundary: the cost ceiling in{' '}
                 <a
-                  href="https://github.com/coreystevensdev/saas-analytics-dashboard/blob/main/apps/api/src/lib/cost.ts"
+                  href="https://github.com/coreystevensdev/tellsight/blob/main/apps/api/src/lib/cost.ts"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-mono text-xs underline underline-offset-4 hover:text-primary"
@@ -363,7 +363,7 @@ export default function LandingPage() {
                 — Corey, maker of Tellsight
                 <br />
                 <a
-                  href="https://github.com/coreystevensdev/saas-analytics-dashboard/issues"
+                  href="https://github.com/coreystevensdev/tellsight/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-4 transition-colors hover:underline"
