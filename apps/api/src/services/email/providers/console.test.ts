@@ -48,7 +48,7 @@ function makeFakeFs(overrides: Partial<{ writeFile: ReturnType<typeof vi.fn>; mk
 }
 
 // Minimal React fixture, one element with literal content so render produces
-// deterministic HTML. Avoids pulling @react-email/components element wrappers
+// deterministic HTML. Avoids pulling @react-email/render element wrappers
 // into unit tests.
 const template = () => React.createElement('p', null, 'hello world');
 
