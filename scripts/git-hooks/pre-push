@@ -1,0 +1,17 @@
+#!/bin/sh
+# Run lint, type-check, and the seed-data snapshot before pushing.
+# The snapshot guard catches drift in the assembled-prompt text that
+# unit tests miss (this is the failure that broke CI on 2026-04-30).
+# Skip with: git push --no-verify (not recommended).
+set -e
+
+echo "[pre-push] pnpm lint"
+pnpm lint
+
+echo "[pre-push] pnpm type-check"
+pnpm type-check
+
+echo "[pre-push] seed-data snapshot"
+pnpm -C apps/api exec tsx ../../scripts/validate-seed.ts
+
+echo "[pre-push] ok"
