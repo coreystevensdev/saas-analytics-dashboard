@@ -15,7 +15,7 @@
 
 Most analytics tools show you what happened. This one tells you what it means. Upload a CSV, get instant charts, and let AI interpret the trends, anomalies, and opportunities your data reveals. No data science degree required.
 
-Built around production patterns end-to-end: multi-tenant architecture with PostgreSQL row-level security, SSE streaming for AI summaries, Stripe billing, and a privacy-first AI pipeline that sends computed statistics rather than raw rows.
+Built end-to-end on multi-tenant patterns: PostgreSQL row-level security, SSE streaming for AI summaries, Stripe billing, and a privacy-first AI pipeline that sends computed statistics rather than raw rows.
 
 ## Problem
 
@@ -46,7 +46,7 @@ The core thesis: **interpretation over visualization.**
 
 <img src="docs/screenshots/feature-charts-dark.png" alt="Dashboard charts in dark mode">
 
-**Dark Mode.** System preference detection + manual toggle. Every component, every chart, every panel.
+**Dark Mode.** System preference detection + manual toggle. Charts, panels, and overlays all themed.
 
 </td>
 </tr>
