@@ -148,6 +148,10 @@ scripts/           CI tools (seed validation, screenshot generation)
 e2e/               Playwright E2E tests
 ```
 
+## Sister project
+
+[**InvoiceFlow**](https://github.com/coreystevensdev/invoiceflow) ([live demo](https://invoiceflow-cs.vercel.app)) applies the same Claude + privacy-first approach to extracting data rather than interpreting it. The two compose: InvoiceFlow turns PDF invoices into CSVs; Tellsight reads CSVs and explains what's in them.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
