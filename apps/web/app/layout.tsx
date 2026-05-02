@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'Tellsight',
-  description: 'AI-powered analytics that explains your business data in plain English.',
+  description: 'Analytics that explains your business data in plain English. Built on Claude.',
 };
 
 export default function RootLayout({

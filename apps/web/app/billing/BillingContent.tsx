@@ -61,7 +61,7 @@ export function BillingContent() {
         </div>
         {tier === 'free' && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Upgrade to Pro for full AI-powered business insights, no word limits, no blur.
+            Upgrade to Pro for the full Claude-written business analysis, no word limits, no blur.
           </p>
         )}
       </div>
@@ -85,7 +85,7 @@ export function BillingContent() {
             <ul className="mt-4 space-y-2 text-sm text-card-foreground">
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-primary" aria-hidden="true">&#10003;</span>
-                Full AI-powered analysis (no word limit)
+                Full Claude analysis (no word limit)
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-primary" aria-hidden="true">&#10003;</span>

@@ -144,7 +144,7 @@ export default function IntegrationsManager() {
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Weekly Email Digest</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  AI-powered summary of your business data, delivered every Sunday.
+                  Plain-English summary of your business data, delivered every Sunday.
                 </p>
               </div>
             </div>

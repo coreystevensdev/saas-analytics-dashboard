@@ -12,7 +12,7 @@ interface DemoModeBannerProps {
 
 const MESSAGES: Partial<Record<DemoModeState, string>> = {
   seed_only: "You're viewing sample data, upload your own CSV to see real insights",
-  empty: 'Get started, upload a CSV to see AI-powered insights',
+  empty: 'Get started, upload a CSV to see plain-English insights',
 };
 
 export function DemoModeBanner({ demoState, onUploadClick }: DemoModeBannerProps) {
