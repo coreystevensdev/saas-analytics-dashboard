@@ -270,8 +270,8 @@ export default function LandingPage() {
             Your raw numbers never reach the AI.
           </h2>
           <p className="mt-4 text-muted-foreground md:text-lg">
-            Tellsight reads your CSV, computes the stats &mdash; totals, trends,
-            anomalies, year-over-year &mdash; and sends only those summaries to
+            Tellsight reads your CSV, computes the stats (totals, trends,
+            anomalies, year-over-year), and sends only those summaries to
             Claude. Claude never sees your individual transactions.
           </p>
           <p className="mt-3 text-muted-foreground md:text-lg">
@@ -296,7 +296,7 @@ export default function LandingPage() {
 
           <details className="mt-6 rounded-lg border border-border/60 bg-card p-4 text-sm">
             <summary className="cursor-pointer select-none font-medium text-foreground">
-              For engineers &mdash; how it&apos;s enforced
+              For engineers, how it&apos;s enforced
             </summary>
             <div className="mt-3 space-y-2 text-muted-foreground">
               <p>
@@ -404,7 +404,7 @@ export default function LandingPage() {
               Tellsight
             </div>
             <p className="text-xs text-muted-foreground">
-              AI-powered analytics for small business
+              Plain-English analytics for small business
             </p>
           </div>
         </div>

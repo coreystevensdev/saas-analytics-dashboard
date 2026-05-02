@@ -35,7 +35,7 @@ export function CsvPreview({ previewData, onConfirm, onCancel, isConfirming }: C
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-sm">
           <caption className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">
-            Preview of uploaded data &mdash; {validRowCount.toLocaleString()} rows detected
+            Preview of uploaded data, {validRowCount.toLocaleString()} rows detected
           </caption>
           <thead>
             <tr className="border-b bg-muted/50">
