@@ -86,6 +86,7 @@ export const ANALYTICS_EVENTS = {
   INTEGRATION_SYNC_FAILED: 'integration.sync_failed',
   DIGEST_SENT: 'digest.sent',
   DIGEST_FAILED: 'digest.failed',
+  DIGEST_SKIPPED: 'digest.skipped',
   DIGEST_TEASER_SENT: 'digest.teaser_sent',
   DIGEST_PREFERENCE_CHANGED: 'digest.preference_changed',
   FINANCIALS_UPDATED: 'financials.updated',
@@ -187,6 +188,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 
 export const AI_DISCLAIMER =
   'AI-generated analysis, not financial advice. Verify with your accountant.' as const;
+
+export { DIGEST_UTM_PARAMS } from './utm.js';
 
 export const DEMO_MODE_STATES = {
   SEED_ONLY: 'seed_only',

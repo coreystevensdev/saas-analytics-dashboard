@@ -1,7 +1,7 @@
 import { sql, and, eq, lt, isNotNull, gte, exists, or, isNull, ne, desc } from 'drizzle-orm';
 
 import { dbAdmin } from '../../lib/db.js';
-import { orgs, subscriptions, datasets, userOrgs, digestPreferences } from '../schema.js';
+import { orgs, subscriptions, datasets, userOrgs, digestPreferences, users } from '../schema.js';
 
 export interface EligibleOrg {
   id: number;
@@ -69,4 +69,45 @@ export async function findEligibleOrgs(
 
   // activeDatasetId is non-null per the WHERE clause; narrow the type.
   return rows.filter((r): r is EligibleOrg => r.activeDatasetId !== null);
+}
+
+export interface DigestRecipient {
+  userId: number;
+  email: string;
+  name: string;
+}
+
+const SIX_DAYS_AGO = sql`now() - interval '6 days'`;
+
+/**
+ * Returns the org members eligible for a per-send job this tick:
+ *   - cadence='weekly' (or NULL, which defaults to weekly per table DEFAULT)
+ *   - last_sent_at IS NULL OR last_sent_at < now() - interval '6 days'
+ *
+ * Monthly-cadence users get skipped at launch (Epic 9 decision A, weekly only
+ * at launch). Off-cadence users skip via the cadence filter. Per-user dedupe
+ * via the last_sent_at filter prevents a multi-org user from receiving N
+ * digests per week.
+ *
+ * Bypasses RLS via dbAdmin, platform fan-out, not a user request.
+ */
+export async function findOrgRecipients(orgId: number): Promise<DigestRecipient[]> {
+  const rows = await dbAdmin
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+    })
+    .from(userOrgs)
+    .innerJoin(users, eq(users.id, userOrgs.userId))
+    .leftJoin(digestPreferences, eq(digestPreferences.userId, userOrgs.userId))
+    .where(
+      and(
+        eq(userOrgs.orgId, orgId),
+        or(isNull(digestPreferences.cadence), eq(digestPreferences.cadence, 'weekly')),
+        or(isNull(digestPreferences.lastSentAt), lt(digestPreferences.lastSentAt, SIX_DAYS_AGO)),
+      ),
+    );
+
+  return rows;
 }

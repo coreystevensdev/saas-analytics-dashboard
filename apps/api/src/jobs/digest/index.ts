@@ -2,5 +2,10 @@
 // imports init/shutdown from here. Per-handler internals stay private to ./handlers/.
 
 export { initDigestCronJob, shutdownDigestCron } from './cron.js';
-export { initDigestOrchestratorWorker, shutdownDigestWorkers } from './workers.js';
+export {
+  initDigestOrchestratorWorker,
+  initDigestOrgWorker,
+  initDigestSendWorker,
+  shutdownDigestWorkers,
+} from './workers.js';
 export { closeQueues as closeDigestQueues } from './queue.js';

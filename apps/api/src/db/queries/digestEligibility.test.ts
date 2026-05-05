@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Main eligibility query chain
 const mockLimit = vi.fn<(n: number) => Promise<unknown[]>>();
 const mockOrderBy = vi.fn((..._args: unknown[]) => ({ limit: mockLimit }));
 const mockWhere = vi.fn((..._args: unknown[]) => ({ orderBy: mockOrderBy }));
@@ -8,7 +9,13 @@ const mockInnerJoinSubs = vi.fn((..._args: unknown[]) => ({ innerJoin: mockInner
 const mockFromOrgs = vi.fn((..._args: unknown[]) => ({ innerJoin: mockInnerJoinSubs }));
 const mockSelect = vi.fn((..._args: unknown[]) => ({ from: mockFromOrgs }));
 
-// exists() builds a subquery via the same client; cover the inner select path too.
+// findOrgRecipients chain (INNER users + LEFT digest_preferences)
+const mockRecipientsWhere = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const mockRecipientsLeftJoin = vi.fn((..._args: unknown[]) => ({ where: mockRecipientsWhere }));
+const mockRecipientsInnerJoin = vi.fn((..._args: unknown[]) => ({ leftJoin: mockRecipientsLeftJoin }));
+const mockRecipientsFrom = vi.fn((..._args: unknown[]) => ({ innerJoin: mockRecipientsInnerJoin }));
+
+// exists() subquery chain
 const mockExistsLeftJoin = vi.fn((..._args: unknown[]) => ({ where: vi.fn() }));
 const mockExistsFrom = vi.fn((..._args: unknown[]) => ({ leftJoin: mockExistsLeftJoin }));
 const mockExistsSelect = vi.fn((..._args: unknown[]) => ({ from: mockExistsFrom }));
@@ -16,8 +23,8 @@ const mockExistsSelect = vi.fn((..._args: unknown[]) => ({ from: mockExistsFrom 
 vi.mock('../../lib/db.js', () => ({
   dbAdmin: {
     select: (arg?: unknown) => {
-      // Two select shapes: the main query and the exists() subquery.
-      // Heuristic: subquery passes a single { x: <sql> } projection.
+      // Three select shapes: main eligibility, recipients, and exists() subquery.
+      // Subquery: single { x: <sql> } projection.
       if (
         arg &&
         typeof arg === 'object' &&
@@ -27,13 +34,23 @@ vi.mock('../../lib/db.js', () => ({
         mockExistsSelect(arg);
         return { from: mockExistsFrom };
       }
+      // Recipients: { userId, email, name } projection.
+      if (
+        arg &&
+        typeof arg === 'object' &&
+        'userId' in (arg as Record<string, unknown>) &&
+        'email' in (arg as Record<string, unknown>)
+      ) {
+        return { from: mockRecipientsFrom };
+      }
+      // Default: main eligibility query.
       mockSelect(arg);
       return { from: mockFromOrgs };
     },
   },
 }));
 
-const { findEligibleOrgs } = await import('./digestEligibility.js');
+const { findEligibleOrgs, findOrgRecipients } = await import('./digestEligibility.js');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -89,5 +106,37 @@ describe('findEligibleOrgs', () => {
 
     expect(mockInnerJoinSubs).toHaveBeenCalled();
     expect(mockInnerJoinDatasets).toHaveBeenCalled();
+  });
+});
+
+describe('findOrgRecipients', () => {
+  it('returns user rows shaped as DigestRecipient', async () => {
+    mockRecipientsWhere.mockResolvedValueOnce([
+      { userId: 1, email: 'a@x.com', name: 'Alice' },
+      { userId: 2, email: 'b@x.com', name: 'Bob' },
+    ]);
+
+    const rows = await findOrgRecipients(42);
+
+    expect(rows).toEqual([
+      { userId: 1, email: 'a@x.com', name: 'Alice' },
+      { userId: 2, email: 'b@x.com', name: 'Bob' },
+    ]);
+  });
+
+  it('returns an empty array when no member matches the filters', async () => {
+    mockRecipientsWhere.mockResolvedValueOnce([]);
+
+    const rows = await findOrgRecipients(42);
+
+    expect(rows).toEqual([]);
+  });
+
+  it('exercises the LEFT JOIN onto digest_preferences (NULL counts as opted-in)', async () => {
+    mockRecipientsWhere.mockResolvedValueOnce([]);
+
+    await findOrgRecipients(42);
+
+    expect(mockRecipientsLeftJoin).toHaveBeenCalled();
   });
 });

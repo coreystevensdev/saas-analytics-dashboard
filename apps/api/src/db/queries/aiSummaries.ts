@@ -38,6 +38,17 @@ export async function getLatestSummary(
   });
 }
 
+/** Direct lookup by primary key. Used by the per-send digest worker which
+ *  carries the summaryId in the job payload (not the dataset/week tuple). */
+export async function getById(
+  id: number,
+  client: typeof db | DbTransaction = db,
+) {
+  return client.query.aiSummaries.findFirst({
+    where: eq(aiSummaries.id, id),
+  });
+}
+
 /** Digest-audience cache lookup. weekStart pins the row to a specific week so
  *  back-to-back Sunday cron ticks land on the same cached row. */
 export async function getCachedDigest(
