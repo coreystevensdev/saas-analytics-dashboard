@@ -156,10 +156,13 @@ describe('runFullPipeline', () => {
       expect.objectContaining({ user: expect.stringContaining('business analyst') }),
     );
     expect(aiSummariesQueries.storeSummary).toHaveBeenCalledWith(
-      1, 1,
-      'Fresh AI analysis.',
-      expect.objectContaining({ promptVersion: 'v1.6', insightCount: expect.any(Number) }),
-      'v1.6',
+      expect.objectContaining({
+        orgId: 1,
+        datasetId: 1,
+        content: 'Fresh AI analysis.',
+        metadata: expect.objectContaining({ promptVersion: 'v1.6', insightCount: expect.any(Number) }),
+        promptVersion: 'v1.6',
+      }),
     );
   });
 
@@ -202,7 +205,7 @@ describe('runFullPipeline', () => {
 
     // cache receives the stripped version
     const storeCall = vi.mocked(aiSummariesQueries.storeSummary).mock.calls[0]!;
-    expect(storeCall[2]).toBe('Runway is tight  this quarter.');
+    expect(storeCall[0]).toMatchObject({ content: 'Runway is tight  this quarter.' });
   });
 });
 

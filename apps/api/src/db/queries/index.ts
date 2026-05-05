@@ -15,3 +15,5 @@ export * as integrationConnectionsQueries from './integrationConnections.js';
 export * as syncJobsQueries from './syncJobs.js';
 export * as auditLogsQueries from './auditLogs.js';
 export * as orgFinancialsQueries from './orgFinancials.js';
+export * as digestPreferencesQueries from './digestPreferences.js';
+export * as digestEligibilityQueries from './digestEligibility.js';

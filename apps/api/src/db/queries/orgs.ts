@@ -65,7 +65,14 @@ export async function setActiveDataset(
   return updated ?? null;
 }
 
-/** Admin query, bypasses RLS to list all orgs that have an active dataset. */
+/**
+ * Admin query, bypasses RLS to list all orgs that have an active dataset.
+ *
+ * @deprecated Filters only on activeDatasetId. Does NOT check subscription tier
+ * or dataset recency, so it over-returns for any digest, billing, or
+ * eligibility-style enumeration. Use `findEligibleOrgs()` from
+ * `db/queries/digestEligibility.ts` for that shape.
+ */
 export async function getAllOrgsWithActiveDataset() {
   return dbAdmin.query.orgs.findMany({
     where: isNotNull(orgs.activeDatasetId),

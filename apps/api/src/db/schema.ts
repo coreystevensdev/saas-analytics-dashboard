@@ -194,13 +194,33 @@ export const aiSummaries = pgTable(
     transparencyMetadata: jsonb('transparency_metadata').notNull().default('{}'),
     promptVersion: varchar('prompt_version', { length: 20 }).notNull(),
     isSeed: boolean('is_seed').default(false).notNull(),
+    audience: text('audience').notNull().default('dashboard'),
+    weekStart: timestamp('week_start', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     staleAt: timestamp('stale_at', { withTimezone: true }),
   },
   (table) => [
     index('idx_ai_summaries_org_dataset').on(table.orgId, table.datasetId),
+    uniqueIndex('idx_ai_summaries_digest_unique')
+      .on(table.orgId, table.datasetId, table.audience, table.weekStart)
+      .where(sql`${table.audience} = 'digest-weekly'`),
   ],
 );
+
+// Per-user, not per-org. One unsubscribe stops all digests for the user across
+// every org membership (Epic 9 decision C). Worker code touches this via
+// dbAdmin; user-facing routes (Story 9.4) will use db with current_user_id set.
+export const digestPreferences = pgTable('digest_preferences', {
+  userId: integer('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  cadence: text('cadence').notNull().default('weekly'),
+  timezone: text('timezone').notNull().default('UTC'),
+  lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
+  unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const shares = pgTable(
   'shares',
@@ -357,13 +377,21 @@ export const cashBalanceSnapshotsRelations = relations(cashBalanceSnapshots, ({ 
   }),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   userOrgs: many(userOrgs),
   refreshTokens: many(refreshTokens),
   createdInvites: many(orgInvites, { relationName: 'inviteCreator' }),
   createdShares: many(shares, { relationName: 'shareCreator' }),
   analyticsEvents: many(analyticsEvents),
   uploadedDatasets: many(datasets, { relationName: 'datasetUploader' }),
+  digestPreference: one(digestPreferences),
+}));
+
+export const digestPreferencesRelations = relations(digestPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [digestPreferences.userId],
+    references: [users.id],
+  }),
 }));
 
 export const orgsRelations = relations(orgs, ({ many, one }) => ({

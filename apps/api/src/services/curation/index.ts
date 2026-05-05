@@ -124,13 +124,13 @@ export async function runFullPipeline(
     );
   }
 
-  await aiSummariesQueries.storeSummary(
+  await aiSummariesQueries.storeSummary({
     orgId,
     datasetId,
-    cachedContent,
-    validatedMetadata,
-    metadata.promptVersion,
-  );
+    content: cachedContent,
+    metadata: validatedMetadata,
+    promptVersion: metadata.promptVersion,
+  });
 
   logger.info({ orgId, datasetId }, 'ai summary stored in cache');
 

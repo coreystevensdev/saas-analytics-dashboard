@@ -3,6 +3,8 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import { db, type DbTransaction } from '../../lib/db.js';
 import { aiSummaries } from '../schema.js';
 
+export type SummaryAudience = 'dashboard' | 'digest-weekly' | 'share';
+
 export async function getCachedSummary(
   orgId: number,
   datasetId: number,
@@ -12,6 +14,7 @@ export async function getCachedSummary(
     where: and(
       eq(aiSummaries.orgId, orgId),
       eq(aiSummaries.datasetId, datasetId),
+      eq(aiSummaries.audience, 'dashboard'),
       isNull(aiSummaries.staleAt),
     ),
   });
@@ -29,20 +32,55 @@ export async function getLatestSummary(
     where: and(
       eq(aiSummaries.orgId, orgId),
       eq(aiSummaries.datasetId, datasetId),
+      eq(aiSummaries.audience, 'dashboard'),
     ),
     orderBy: [desc(aiSummaries.createdAt)],
   });
 }
 
-export async function storeSummary(
+/** Digest-audience cache lookup. weekStart pins the row to a specific week so
+ *  back-to-back Sunday cron ticks land on the same cached row. */
+export async function getCachedDigest(
   orgId: number,
   datasetId: number,
-  content: string,
-  metadata: Record<string, unknown>,
-  promptVersion: string,
-  isSeed = false,
+  weekStart: Date,
   client: typeof db | DbTransaction = db,
 ) {
+  return client.query.aiSummaries.findFirst({
+    where: and(
+      eq(aiSummaries.orgId, orgId),
+      eq(aiSummaries.datasetId, datasetId),
+      eq(aiSummaries.audience, 'digest-weekly'),
+      eq(aiSummaries.weekStart, weekStart),
+    ),
+  });
+}
+
+export interface StoreSummaryOpts {
+  orgId: number;
+  datasetId: number;
+  content: string;
+  metadata: Record<string, unknown>;
+  promptVersion: string;
+  isSeed?: boolean;
+  audience?: SummaryAudience;
+  weekStart?: Date | null;
+  client?: typeof db | DbTransaction;
+}
+
+export async function storeSummary(opts: StoreSummaryOpts) {
+  const {
+    orgId,
+    datasetId,
+    content,
+    metadata,
+    promptVersion,
+    isSeed = false,
+    audience = 'dashboard',
+    weekStart = null,
+    client = db,
+  } = opts;
+
   const [row] = await client
     .insert(aiSummaries)
     .values({
@@ -52,6 +90,8 @@ export async function storeSummary(
       transparencyMetadata: metadata,
       promptVersion,
       isSeed,
+      audience,
+      weekStart,
     })
     .returning();
   return row!;

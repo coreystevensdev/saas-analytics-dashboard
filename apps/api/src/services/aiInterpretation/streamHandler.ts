@@ -232,15 +232,14 @@ export async function streamToSSE(
     }
 
     try {
-      await aiSummariesQueries.storeSummary(
+      await aiSummariesQueries.storeSummary({
         orgId,
         datasetId,
-        cachedText,
-        validatedMetadata,
+        content: cachedText,
+        metadata: validatedMetadata,
         promptVersion,
-        false,
         client,
-      );
+      });
       logger.info({ orgId, datasetId }, 'AI summary streamed and cached');
     } catch (cacheErr) {
       logger.warn(

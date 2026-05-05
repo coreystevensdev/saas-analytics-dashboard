@@ -188,7 +188,15 @@ describe('streamToSSE', () => {
     const { streamToSSE } = await import('./streamHandler.js');
     await streamToSSE(req, res, 1, 42, 99);
 
-    expect(mockStoreSummary).toHaveBeenCalledWith(1, 42, 'cached text', defaultMetadata, 'v1', false, undefined);
+    expect(mockStoreSummary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 1,
+        datasetId: 42,
+        content: 'cached text',
+        metadata: defaultMetadata,
+        promptVersion: 'v1',
+      }),
+    );
   });
 
   it('emits AI_SUMMARY_VALIDATION_FLAGGED when the validator finds unmatched numbers', async () => {
@@ -280,9 +288,7 @@ describe('streamToSSE', () => {
     // the cache write received the stripped text, not the raw LLM output
     expect(mockStoreSummary).toHaveBeenCalled();
     const call = mockStoreSummary.mock.calls[0]!;
-    expect(call[0]).toBe(1);
-    expect(call[1]).toBe(42);
-    expect(call[2]).toBe('runway  ok');
+    expect(call[0]).toMatchObject({ orgId: 1, datasetId: 42, content: 'runway  ok' });
   });
 
   it('does not emit the validation event when the validator returns clean', async () => {
