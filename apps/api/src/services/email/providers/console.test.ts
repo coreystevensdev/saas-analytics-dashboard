@@ -22,7 +22,7 @@ vi.hoisted(() => {
 
 import { env } from '../../../config.js';
 import type { logger as pinoLogger } from '../../../lib/logger.js';
-import { createConsoleProvider, redactRecipient } from './console.js';
+import { createConsoleProvider, redactRecipient, redactUnsubscribeToken } from './console.js';
 
 // Explicit vi.fn() references so tests can introspect `.mock.calls` without
 // fighting pino's LogFn overloads. Cast back to the pino logger type at
@@ -81,6 +81,53 @@ describe('console provider', () => {
     expect(payload.outcome).toBe('captured');
     expect(payload.correlationId).toBe('corr-1');
     expect(payload.renderedHtmlPreview).toContain('hello world');
+  });
+
+  it('includes opts.headers in the structured log payload when provided', async () => {
+    const { logger, info } = makeFakeLogger();
+    const provider = createConsoleProvider(env, { logger });
+
+    await provider.send({
+      to: 'a@b.com',
+      subject: 's',
+      react: template(),
+      headers: { 'X-Test': 'foo', 'List-Unsubscribe': '<https://x/u>' },
+    });
+
+    const [payload] = info.mock.calls[0]! as [Record<string, unknown>];
+    expect(payload.headers).toEqual({ 'X-Test': 'foo', 'List-Unsubscribe': '<https://x/u>' });
+  });
+
+  it('masks the HMAC signature in unsubscribe URLs when logging headers', async () => {
+    const { logger, info } = makeFakeLogger();
+    const provider = createConsoleProvider(env, { logger });
+    const realToken = 'AbCdEf-_123';
+
+    await provider.send({
+      to: 'a@b.com',
+      subject: 's',
+      react: template(),
+      headers: {
+        'List-Unsubscribe': `<https://app.tellsight.com/unsubscribe/digest/42.${realToken}>, <mailto:unsubscribe@tellsight.test>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+
+    const [payload] = info.mock.calls[0]! as [Record<string, { 'List-Unsubscribe': string }>];
+    const logged = payload.headers!['List-Unsubscribe'];
+    expect(logged).toContain('/unsubscribe/digest/42.***');
+    expect(logged).toContain('mailto:unsubscribe@tellsight.test');
+    expect(logged).not.toContain(realToken);
+  });
+
+  it('omits the headers key from the log payload when caller omits it', async () => {
+    const { logger, info } = makeFakeLogger();
+    const provider = createConsoleProvider(env, { logger });
+
+    await provider.send({ to: 'a@b.com', subject: 's', react: template() });
+
+    const [payload] = info.mock.calls[0]! as [Record<string, unknown>];
+    expect('headers' in payload).toBe(false);
   });
 
   it('generates a correlationId when caller omits it', async () => {
@@ -191,5 +238,35 @@ describe('redactRecipient', () => {
 
   it('passes malformed input through unchanged', () => {
     expect(redactRecipient('no-at-sign')).toBe('no-at-sign');
+  });
+});
+
+describe('redactUnsubscribeToken', () => {
+  it('masks the signature portion of a digest unsubscribe URL', () => {
+    const input = '<https://app.tellsight.com/unsubscribe/digest/42.AbCdEf-_123>';
+    expect(redactUnsubscribeToken(input)).toBe(
+      '<https://app.tellsight.com/unsubscribe/digest/42.***>',
+    );
+  });
+
+  it('preserves non-token URL segments (mailto, brackets, commas)', () => {
+    const input =
+      '<https://app.tellsight.com/unsubscribe/digest/7.sig123>, <mailto:unsubscribe@tellsight.test>';
+    expect(redactUnsubscribeToken(input)).toBe(
+      '<https://app.tellsight.com/unsubscribe/digest/7.***>, <mailto:unsubscribe@tellsight.test>',
+    );
+  });
+
+  it('passes through values that do not match the digest path pattern', () => {
+    expect(redactUnsubscribeToken('<https://x/u>')).toBe('<https://x/u>');
+    expect(redactUnsubscribeToken('plain-text')).toBe('plain-text');
+  });
+
+  it('masks every occurrence when the path appears more than once', () => {
+    const input =
+      '/unsubscribe/digest/1.aaa and /unsubscribe/digest/2.bbb';
+    expect(redactUnsubscribeToken(input)).toBe(
+      '/unsubscribe/digest/1.*** and /unsubscribe/digest/2.***',
+    );
   });
 });

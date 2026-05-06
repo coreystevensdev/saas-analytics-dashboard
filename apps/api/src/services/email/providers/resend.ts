@@ -64,6 +64,7 @@ export function createResendProvider(env: Env, deps: ResendDeps = {}): EmailProv
           html,
           replyTo: opts.replyTo ?? env.EMAIL_REPLY_TO,
           tags: tagsToResendFormat(opts.tags),
+          ...(opts.headers ? { headers: opts.headers } : {}),
         });
       } catch (err) {
         // Network / SDK-internal throw. Treat as transient by default.

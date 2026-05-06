@@ -276,6 +276,38 @@ describe('resend provider', () => {
     expect(payload.tags).toBeUndefined();
   });
 
+  it('forwards opts.headers to the Resend SDK call', async () => {
+    const { logger } = makeFakeLogger();
+    const { client, send } = fakeResend(async () => ({ data: { id: 'x' }, error: null }));
+    const provider = createResendProvider(env, { resend: client, sentry, logger });
+
+    await provider.send({
+      to: 'a@b.com',
+      subject: 's',
+      react: template(),
+      headers: {
+        'List-Unsubscribe': '<https://app/u>, <mailto:unsubscribe@kiln.app>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+
+    const [payload] = send.mock.calls[0]! as [Record<string, unknown>];
+    expect(payload.headers).toEqual({
+      'List-Unsubscribe': '<https://app/u>, <mailto:unsubscribe@kiln.app>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+  });
+
+  it('omits the headers key from the SDK payload when caller omits it', async () => {
+    const { logger } = makeFakeLogger();
+    const { client, send } = fakeResend(async () => ({ data: { id: 'x' }, error: null }));
+    const provider = createResendProvider(env, { resend: client, sentry, logger });
+
+    await provider.send({ to: 'a@b.com', subject: 's', react: template() });
+    const [payload] = send.mock.calls[0]! as [Record<string, unknown>];
+    expect('headers' in payload).toBe(false);
+  });
+
   it('throws retryable EmailSendError when SDK returns neither id nor error', async () => {
     const { logger, error } = makeFakeLogger();
     const { client } = fakeResend(async () => ({

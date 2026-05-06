@@ -16,15 +16,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 //     audience='digest-weekly' on cache miss.
 //
 // What this does NOT verify (covered elsewhere or carry-forward):
-//   - Eligibility SQL filters (Pro tier, recency, cadence) — see
+//   - Eligibility SQL filters (Pro tier, recency, cadence), see
 //     digestEligibility.test.ts SQL-shape tests.
-//   - Curation pipeline behavior — runCurationPipeline, assemblePrompt,
+//   - Curation pipeline behavior, runCurationPipeline, assemblePrompt,
 //     generateInterpretation, validateStatRefs are all mocked here.
-//   - Email rendering — sendEmail is mocked; the React Email template is
-//     covered in templates/digestMinimal.test.tsx.
-//   - Real BullMQ scheduling — queue.add is captured and replayed; the
+//   - Email rendering, sendEmail is mocked; the React Email template is
+//     covered in templates/digestWeekly.test.tsx.
+//   - Real BullMQ scheduling, queue.add is captured and replayed; the
 //     scheduler/worker contract is covered in cron.test.ts and workers.test.ts.
-//   - Real DB writes / RLS — every query is mocked at the barrel boundary;
+//   - Real DB writes / RLS, every query is mocked at the barrel boundary;
 //     the audience-scope filter is covered in aiSummaries.test.ts SQL-shape
 //     tests.
 //
@@ -86,6 +86,8 @@ vi.mock('../../config.js', () => ({
     APP_URL: 'https://app.tellsight.com',
     JWT_SECRET: 'a'.repeat(64),
     EMAIL_MAILING_ADDRESS: '1 Real St, City, ZZ 00000',
+    EMAIL_FROM_ADDRESS: 'digest@tellsight.test',
+    EMAIL_FROM_NAME: 'Tellsight',
   },
 }));
 

@@ -18,6 +18,8 @@ export interface SendEmailOpts {
   tags?: Record<string, string>;
   replyTo?: string;
   correlationId?: string;
+  /** Custom SMTP/HTTP headers; primarily for List-Unsubscribe compliance. */
+  headers?: Record<string, string>;
 }
 
 export interface SendResult {

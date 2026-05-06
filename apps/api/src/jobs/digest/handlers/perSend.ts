@@ -8,21 +8,23 @@ import { aiSummariesQueries, digestPreferencesQueries } from '../../../db/querie
 import { sendEmail, EmailSendError } from '../../../services/email/index.js';
 import { trackEvent } from '../../../services/analytics/trackEvent.js';
 import {
-  DigestMinimal,
+  DigestWeekly,
+  buildRecipientExplanation,
   parseSummaryToBullets,
   buildDashboardUrl,
   buildUnsubscribeUrl,
-} from '../templates/digestMinimal.js';
+} from '../templates/digestWeekly.js';
 import type { SendJobData } from '../queue.js';
 
-const TEMPLATE_VERSION = 'digest-weekly-minimal';
+const TEMPLATE_VERSION = 'digest-weekly-v1';
 const SIX_DAYS_MS = 6 * 86_400_000;
 
 /**
  * Per-send handler. Final dedupe race-check against last_sent_at, render the
- * minimal template, hand to sendEmail, then mark sent + emit analytics on
- * success. Retryable provider failures re-throw so BullMQ retries; terminal
- * failures emit digest_failed and exit cleanly (no retry, no markSent).
+ * weekly digest template, hand to sendEmail (with List-Unsubscribe headers),
+ * mark sent + emit analytics on success. Retryable provider failures re-throw
+ * so BullMQ retries; terminal failures emit digest_failed and exit cleanly
+ * (no retry, no markSent).
  */
 export async function handlePerSendJob(job: Job): Promise<void> {
   const { userId, orgId, summaryId, weekStart, userEmail, orgName, correlationId } =
@@ -71,23 +73,26 @@ export async function handlePerSendJob(job: Job): Promise<void> {
   const bullets = parseSummaryToBullets(row.content);
   const dashboardUrl = buildDashboardUrl(row.datasetId);
   const unsubscribeUrl = buildUnsubscribeUrl(userId);
+  const headers = buildListUnsubscribeHeaders(unsubscribeUrl, env.EMAIL_FROM_ADDRESS);
 
   try {
     const result = await sendEmail({
       to: userEmail,
       subject: `${orgName} weekly insights`,
-      react: DigestMinimal({
+      react: DigestWeekly({
         orgName,
         bullets,
         dashboardUrl,
         unsubscribeUrl,
         mailingAddress: env.EMAIL_MAILING_ADDRESS,
+        companyName: env.EMAIL_FROM_NAME,
       }),
       tags: {
         template: TEMPLATE_VERSION,
         org_id: String(orgId),
         user_id: String(userId),
       },
+      headers,
       correlationId,
     });
 
@@ -100,6 +105,9 @@ export async function handlePerSendJob(job: Job): Promise<void> {
       providerMessageId: result.providerMessageId,
     });
 
+    // canSpamElements is the structured audit trail. Console provider
+    // truncates renderedHtmlPreview at 200 chars and the footer sits past
+    // that, so the handler logs the footer fields directly.
     logger.info(
       {
         correlationId,
@@ -109,6 +117,12 @@ export async function handlePerSendJob(job: Job): Promise<void> {
         outcome: 'sent',
         providerMessageId: result.providerMessageId,
         durationMs: Date.now() - start,
+        canSpamElements: {
+          mailingAddress: env.EMAIL_MAILING_ADDRESS,
+          unsubscribeUrl,
+          recipientExplanation: buildRecipientExplanation(orgName),
+          companyName: env.EMAIL_FROM_NAME,
+        },
       },
       'Per-send complete',
     );
@@ -141,4 +155,28 @@ export async function handlePerSendJob(job: Job): Promise<void> {
       providerStatusCode: err instanceof EmailSendError ? err.providerStatusCode : null,
     });
   }
+}
+
+// Pair of headers Gmail/Yahoo 2024 sender rules require for one-click
+// unsubscribe to count. Both go or neither goes; List-Unsubscribe-Post is
+// meaningless without List-Unsubscribe and would confuse downstream tooling
+// if shipped alone.
+export function buildListUnsubscribeHeaders(
+  unsubscribeUrl: string,
+  fromAddress: string,
+): { 'List-Unsubscribe': string; 'List-Unsubscribe-Post': string } {
+  // lastIndexOf handles RFC 5322 quoted-local-parts ("a@b"@example.com)
+  // where a naive split would return the wrong segment.
+  const at = fromAddress.lastIndexOf('@');
+  if (at < 0 || at === fromAddress.length - 1) {
+    // env.EMAIL_FROM_ADDRESS is z.string().email() so this can't happen at
+    // runtime; the throw stays visible if a test bypasses Zod with a
+    // malformed mock.
+    throw new Error(`EMAIL_FROM_ADDRESS missing domain: "${fromAddress}"`);
+  }
+  const domain = fromAddress.slice(at + 1);
+  return {
+    'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
 }

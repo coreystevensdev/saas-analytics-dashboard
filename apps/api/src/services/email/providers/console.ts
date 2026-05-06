@@ -47,6 +47,7 @@ export function createConsoleProvider(env: Env, deps: ConsoleDeps = {}): EmailPr
           providerMessageId,
           outcome: 'captured',
           durationMs,
+          ...(opts.headers ? { headers: redactHeaders(opts.headers) } : {}),
         },
         'email send captured',
       );
@@ -80,6 +81,24 @@ function redactOne(email: string): string {
   const domain = email.slice(at);
   const keep = local.slice(0, 2);
   return `${keep}***${domain}`;
+}
+
+// The unsubscribe URL embeds `${userId}.${hmacSignature}`. The signature is a
+// credential: anyone with log access can replay it to unsubscribe that user.
+// userId is operationally visible elsewhere in structured logs, so keep it.
+// Precise pattern (digest path only) avoids false positives on unrelated values.
+const UNSUBSCRIBE_TOKEN_PATTERN = /(\/unsubscribe\/digest\/\d+)\.[A-Za-z0-9_-]+/g;
+
+export function redactUnsubscribeToken(value: string): string {
+  return value.replace(UNSUBSCRIBE_TOKEN_PATTERN, '$1.***');
+}
+
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    out[name] = redactUnsubscribeToken(value);
+  }
+  return out;
 }
 
 async function captureHtml(

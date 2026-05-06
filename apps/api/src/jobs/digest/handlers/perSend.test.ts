@@ -27,6 +27,8 @@ vi.mock('../../../config.js', () => ({
     APP_URL: 'https://app.tellsight.com',
     JWT_SECRET: 'a'.repeat(64),
     EMAIL_MAILING_ADDRESS: '1 Real St, Anywhere',
+    EMAIL_FROM_ADDRESS: 'digest@tellsight.test',
+    EMAIL_FROM_NAME: 'Tellsight',
   },
 }));
 
@@ -99,7 +101,7 @@ describe('happy path', () => {
         to: 'alice@example.com',
         subject: 'Acme Coffee weekly insights',
         tags: expect.objectContaining({
-          template: 'digest-weekly-minimal',
+          template: 'digest-weekly-v1',
           org_id: '42',
           user_id: '7',
         }),
@@ -112,11 +114,66 @@ describe('happy path', () => {
       7,
       'digest.sent',
       expect.objectContaining({
-        templateVersion: 'digest-weekly-minimal',
+        templateVersion: 'digest-weekly-v1',
         summaryId: 999,
         providerMessageId: 'msg-123',
       }),
     );
+  });
+
+  it('attaches paired List-Unsubscribe headers derived from the unsubscribe URL', async () => {
+    mockUpsertDefaults.mockResolvedValueOnce({ userId: 7, cadence: 'weekly', lastSentAt: null });
+    mockGetById.mockResolvedValueOnce(okSummary);
+    mockSendEmail.mockResolvedValueOnce({
+      status: 'sent',
+      providerMessageId: 'msg-h',
+      durationMs: 10,
+    });
+
+    await handlePerSendJob({ id: 'send-h', data: baseJobData } as never);
+
+    const opts = mockSendEmail.mock.calls[0]![0] as {
+      headers?: Record<string, string>;
+    };
+    expect(opts.headers).toBeDefined();
+    expect(opts.headers!['List-Unsubscribe']).toMatch(
+      /^<https:\/\/app\.tellsight\.com\/unsubscribe\/digest\/.+>, <mailto:unsubscribe@tellsight\.test>$/,
+    );
+    expect(opts.headers!['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+  });
+
+  it('logs canSpamElements with all four CAN-SPAM fields on success', async () => {
+    mockUpsertDefaults.mockResolvedValueOnce({ userId: 7, cadence: 'weekly', lastSentAt: null });
+    mockGetById.mockResolvedValueOnce(okSummary);
+    mockSendEmail.mockResolvedValueOnce({
+      status: 'sent',
+      providerMessageId: 'msg-audit',
+      durationMs: 10,
+    });
+
+    const { logger } = await import('../../../lib/logger.js');
+    await handlePerSendJob({ id: 'send-audit', data: baseJobData } as never);
+
+    const successCall = (logger.info as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[1] === 'Per-send complete',
+    );
+    expect(successCall).toBeDefined();
+    const payload = successCall![0] as {
+      canSpamElements: {
+        mailingAddress: string;
+        unsubscribeUrl: string;
+        recipientExplanation: string;
+        companyName: string;
+      };
+    };
+    expect(payload.canSpamElements.mailingAddress).toBe('1 Real St, Anywhere');
+    expect(payload.canSpamElements.unsubscribeUrl).toMatch(
+      /^https:\/\/app\.tellsight\.com\/unsubscribe\/digest\//,
+    );
+    expect(payload.canSpamElements.recipientExplanation).toBe(
+      "You're receiving this because you're a Pro subscriber at Acme Coffee",
+    );
+    expect(payload.canSpamElements.companyName).toBe('Tellsight');
   });
 });
 
