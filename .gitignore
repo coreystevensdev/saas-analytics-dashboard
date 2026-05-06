@@ -61,6 +61,7 @@ scripts/check-story-status.sh
 _bmad/
 _bmad-output/
 CLAUDE.md
+AGENTS.md
 .claude/
 
 # Internal planning docs (local-only)

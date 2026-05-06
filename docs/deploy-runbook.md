@@ -1,6 +1,6 @@
 # Deploy Runbook
 
-Operational guide for the deployed production stack (Vercel + Railway + Neon + Upstash + Cloudflare). First-time bring-up lives in `_bmad-output/implementation-artifacts/tech-spec-production-deployment.md`, this doc is what you reach for after the stack is live.
+Operational guide for the deployed production stack (Vercel + Railway + Neon + Upstash + Cloudflare). This doc is what you reach for after the stack is live.
 
 **Crisis mode cheat sheet:**
 
@@ -214,6 +214,6 @@ Only rotate if the domain itself is changing.
 
 ## Appendix: Known Limitations
 
-- **JWT rotation forces re-login**, no dual-secret overlap. Accepted trade-off documented in tech-spec Task 8. Future enhancement: grace-period rotation that accepts both the old and new secret for N minutes.
+- **JWT rotation forces re-login**, no dual-secret overlap. This is an accepted trade-off; dual-secret rotation would add deployment complexity for marginal benefit at current scale. Future enhancement: grace-period rotation that accepts both the old and new secret for N minutes.
 - **Railway deploy job is fire-and-forget**, the GitHub Actions `deploy` job returns success when the hook accepts the trigger, not when the container is healthy. The 5-minute health poll catches most failures but cannot distinguish "deploy pending" from "deploy started". Upgrade to polling Railway's deployment status API post-launch if stability warrants.
 - **Single-region deployment**, Railway us-east, Neon us-east-2, Upstash us-east-1. Cross-region failover is not wired. If any provider's us-east has a regional outage, the app is down. Multi-region is a post-launch scaling decision, not a Day 1 requirement.
