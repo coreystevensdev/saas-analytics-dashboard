@@ -23,8 +23,6 @@ export const envSchema = z
     SENTRY_DSN: z.string().url().optional(),
 
     RESEND_API_KEY: z.string().min(1).optional(),
-    // deprecated by EMAIL_FROM_ADDRESS (Story 9.1); removed in Story 9.2 after emailDigest/ retires.
-    DIGEST_FROM_EMAIL: z.string().email().default('insights@example.com'),
 
     // Email service (Story 9.1), provider abstraction, console default outside production.
     EMAIL_PROVIDER: z.enum(['resend', 'console', 'postmark']).default('console'),
@@ -90,10 +88,6 @@ export const envSchema = z
   );
 
 export type Env = z.infer<typeof envSchema>;
-
-export function isDigestConfigured(cfg: Env): boolean {
-  return !!cfg.RESEND_API_KEY;
-}
 
 export function isQbConfigured(cfg: Env): boolean {
   return !!(

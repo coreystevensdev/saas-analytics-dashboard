@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 
-import { userOrgsQueries } from '../db/queries/index.js';
-import { verifyUnsubscribeToken } from '../services/emailDigest/unsubscribeToken.js';
+import { digestPreferencesQueries } from '../db/queries/index.js';
+import { dbAdmin } from '../lib/db.js';
+import { verifyUnsubscribeToken } from '../jobs/digest/unsubscribeToken.js';
 import { logger } from '../lib/logger.js';
 
 export const publicDigestUnsubscribeRouter = Router();
@@ -10,6 +11,10 @@ export const publicDigestUnsubscribeRouter = Router();
 // POST keeps the operation out of GET-prefetch scope (some email clients prefetch
 // links for previews). Idempotent: unsubscribing an already-opted-out user is a
 // no-op. The Next.js page at /unsubscribe/digest/[token] calls this.
+//
+// Token shape switched to user-scoped (one-arg) per Epic 9 decision C , 
+// one click stops all digests across every org membership. Old per-org
+// (userId, orgId) shape retired with services/emailDigest/.
 publicDigestUnsubscribeRouter.post('/digest/unsubscribe/:token', async (req, res: Response) => {
   const { token } = req.params;
   const verified = verifyUnsubscribeToken(token ?? '');
@@ -22,10 +27,11 @@ publicDigestUnsubscribeRouter.post('/digest/unsubscribe/:token', async (req, res
     return;
   }
 
-  await userOrgsQueries.updateDigestOptIn(verified.orgId, verified.userId, false);
+  await digestPreferencesQueries.upsertDefaults(verified.userId, dbAdmin);
+  await digestPreferencesQueries.markUnsubscribed(verified.userId, dbAdmin);
 
   logger.info(
-    { orgId: verified.orgId, userId: verified.userId },
+    { userId: verified.userId },
     'User unsubscribed from digest via email link',
   );
 

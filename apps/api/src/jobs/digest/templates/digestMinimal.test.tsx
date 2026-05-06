@@ -94,12 +94,14 @@ describe('buildDashboardUrl', () => {
 });
 
 describe('buildUnsubscribeUrl', () => {
-  it('produces a verifiable token', async () => {
+  it('produces a verifiable token at the existing /unsubscribe/digest/[token] path', async () => {
     const { verifyUnsubscribeToken } = await import('../unsubscribeToken.js');
     const url = buildUnsubscribeUrl(7);
-    const u = new URL(url);
-    const token = u.searchParams.get('token');
-    expect(token).toBeTruthy();
-    expect(verifyUnsubscribeToken(token!)).toEqual({ userId: 7 });
+    expect(url).toMatch(/\/unsubscribe\/digest\//);
+
+    const segments = new URL(url).pathname.split('/');
+    const tokenEncoded = segments[segments.length - 1]!;
+    const token = decodeURIComponent(tokenEncoded);
+    expect(verifyUnsubscribeToken(token)).toEqual({ userId: 7 });
   });
 });
