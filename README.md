@@ -13,9 +13,7 @@
 
 **Live demo:** _(deploying shortly)_
 
-Most analytics tools show you what happened. This one tells you what it means. Upload a CSV, get instant charts, and let AI interpret the trends, anomalies, and opportunities your data reveals. No data science degree required.
-
-Built end-to-end on multi-tenant patterns: PostgreSQL row-level security, SSE streaming for AI summaries, Stripe billing, and a privacy-first AI pipeline that sends computed statistics rather than raw rows.
+Most analytics tools show what happened. This one explains what it means. Upload a CSV of business data, get charts, then a Claude-generated interpretation of what the trends and anomalies actually mean. Multi-tenant Postgres with row-level security, SSE streaming for the AI summary, Stripe billing. The AI only ever sees computed statistics, never raw rows.
 
 ## Problem
 
@@ -25,34 +23,21 @@ Small businesses can't afford data scientists, and enterprise analytics platform
 
 Upload a CSV of your business data. The dashboard instantly visualizes revenue trends, expense breakdowns, and category comparisons. Then AI reads the computed statistics (not your raw data) and explains what's happening in plain English: which costs are rising faster than revenue, where seasonal patterns suggest opportunities, what anomalies deserve attention.
 
-The core thesis: **interpretation over visualization.**
-
 ## Features
 
 <p align="center">
   <img src="docs/screenshots/feature-charts.png" alt="Interactive dashboard with revenue and expense charts" width="100%">
 </p>
 
-<table>
-<tr>
-<td width="50%">
+<p align="center">
+  <img src="docs/screenshots/feature-ai.png" alt="Claude-generated business insights streaming in via SSE">
+</p>
 
-<img src="docs/screenshots/feature-ai.png" alt="AI-powered business insights in dark mode">
+<p align="center">
+  <img src="docs/screenshots/feature-charts-dark.png" alt="Dashboard in dark mode with system-preference detection">
+</p>
 
-**AI-Powered Insights.** Claude reads the computed statistics and explains what matters. Summaries stream in real time via SSE.
-
-</td>
-<td width="50%">
-
-<img src="docs/screenshots/feature-charts-dark.png" alt="Dashboard charts in dark mode">
-
-**Dark Mode.** System preference detection + manual toggle. Charts, panels, and overlays all themed.
-
-</td>
-</tr>
-</table>
-
-**Also included:**
+- **Streaming AI summaries.** Claude reads the computed statistics and explains what matters. Summaries stream in real time via SSE so the user sees output as it generates.
 - **Stripe billing.** Free tier with AI preview (~150 words), Pro tier for full summaries.
 - **Row-level security.** Org-first multi-tenancy with PostgreSQL RLS policies on every table.
 - **Shareable insights.** Generate PNG snapshots or shareable links for team collaboration.
@@ -147,6 +132,16 @@ packages/shared/   Shared schemas, types, constants
 scripts/           CI tools (seed validation, screenshot generation)
 e2e/               Playwright E2E tests
 ```
+
+## Known limitations
+
+A few honest gaps:
+
+- **Live demo not yet deployed.** Until it lands, local Docker Compose is the only way to evaluate end-to-end.
+- **Synthetic seed data only.** The 12 months of demo data are generated to exercise the pipeline; real CSVs with unusual category mixes or column names may surface edge cases the seed doesn't cover.
+- **Curation pipeline scoring is heuristic.** The "rank by relevance" step uses hand-tuned weights, not a learned model. Fine for the demo dataset; real datasets may need re-weighting per industry.
+- **AI summary trust comes from Claude alone.** No second-opinion model, no rule-based validator over the output. The privacy-by-architecture stance keeps raw rows away from the LLM, but it also means there's no automated way to verify a summary against the underlying data; the user has to cross-check against the charts.
+- **Free-tier AI preview is capped at ~150 words.** Enough to evaluate quality, but a hard ceiling that Pro tier removes.
 
 ## Sister project
 
