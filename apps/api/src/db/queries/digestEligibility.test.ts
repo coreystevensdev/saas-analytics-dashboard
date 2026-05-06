@@ -1,64 +1,132 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 
-// Main eligibility query chain
-const mockLimit = vi.fn<(n: number) => Promise<unknown[]>>();
-const mockOrderBy = vi.fn((..._args: unknown[]) => ({ limit: mockLimit }));
-const mockWhere = vi.fn((..._args: unknown[]) => ({ orderBy: mockOrderBy }));
-const mockInnerJoinDatasets = vi.fn((..._args: unknown[]) => ({ where: mockWhere }));
-const mockInnerJoinSubs = vi.fn((..._args: unknown[]) => ({ innerJoin: mockInnerJoinDatasets }));
-const mockFromOrgs = vi.fn((..._args: unknown[]) => ({ innerJoin: mockInnerJoinSubs }));
-const mockSelect = vi.fn((..._args: unknown[]) => ({ from: mockFromOrgs }));
+import * as schema from '../schema.js';
 
-// findOrgRecipients chain (INNER users + LEFT digest_preferences)
+// SQL-shape test rig — Drizzle backed by a real postgres-js tag (lazy
+// connection, never opens a socket because we only call `.toSQL()`). Drizzle
+// requires the tag to expose `.parsers`, so a hand-rolled fake doesn't work.
+// AC #14b asks for "fixture db" coverage; without infra-grade Postgres in
+// tests, capturing the actual emitted SQL is the closest behavioral check
+// possible. A regression in any predicate (Pro tier, active subscription,
+// recency, opted-in member) shows up as a missing or changed clause in the
+// captured SQL string.
+const inertClient = postgres('postgres://test:test@localhost:1/test', {
+  max: 0,
+  fetch_types: false,
+  prepare: false,
+});
+const inertDb = drizzle(inertClient, { schema });
+
+// Execute-path test rig — chain mocks let us assert post-query JS logic
+// (.filter narrowing, return shape) without needing a Drizzle round-trip.
+const mockEligibilityLimit = vi.fn<(n: number) => Promise<unknown[]>>();
+const mockEligibilityOrderBy = vi.fn(() => ({ limit: mockEligibilityLimit }));
+const mockEligibilityWhere = vi.fn(() => ({ orderBy: mockEligibilityOrderBy }));
+const mockEligibilityInnerJoinDatasets = vi.fn(() => ({ where: mockEligibilityWhere }));
+const mockEligibilityInnerJoinSubs = vi.fn(() => ({ innerJoin: mockEligibilityInnerJoinDatasets }));
+const mockEligibilityFrom = vi.fn(() => ({ innerJoin: mockEligibilityInnerJoinSubs }));
+
 const mockRecipientsWhere = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
-const mockRecipientsLeftJoin = vi.fn((..._args: unknown[]) => ({ where: mockRecipientsWhere }));
-const mockRecipientsInnerJoin = vi.fn((..._args: unknown[]) => ({ leftJoin: mockRecipientsLeftJoin }));
-const mockRecipientsFrom = vi.fn((..._args: unknown[]) => ({ innerJoin: mockRecipientsInnerJoin }));
-
-// exists() subquery chain
-const mockExistsLeftJoin = vi.fn((..._args: unknown[]) => ({ where: vi.fn() }));
-const mockExistsFrom = vi.fn((..._args: unknown[]) => ({ leftJoin: mockExistsLeftJoin }));
-const mockExistsSelect = vi.fn((..._args: unknown[]) => ({ from: mockExistsFrom }));
+const mockRecipientsLeftJoin = vi.fn(() => ({ where: mockRecipientsWhere }));
+const mockRecipientsInnerJoin = vi.fn(() => ({ leftJoin: mockRecipientsLeftJoin }));
+const mockRecipientsFrom = vi.fn(() => ({ innerJoin: mockRecipientsInnerJoin }));
 
 vi.mock('../../lib/db.js', () => ({
   dbAdmin: {
-    select: (arg?: unknown) => {
-      // Three select shapes: main eligibility, recipients, and exists() subquery.
-      // Subquery: single { x: <sql> } projection.
-      if (
-        arg &&
-        typeof arg === 'object' &&
-        Object.keys(arg as Record<string, unknown>).length === 1 &&
-        'x' in (arg as Record<string, unknown>)
-      ) {
-        mockExistsSelect(arg);
-        return { from: mockExistsFrom };
+    select: (arg?: Record<string, unknown>) => {
+      // The eligibility builder calls `.select({ x: <sql> })` for the EXISTS
+      // subquery. The recipients builder selects `{ userId, email, name }`.
+      // The main eligibility query selects `{ id, name, activeDatasetId, businessProfile }`.
+      if (arg && Object.keys(arg).length === 1 && 'x' in arg) {
+        return { from: () => ({ leftJoin: () => ({ where: vi.fn() }) }) };
       }
-      // Recipients: { userId, email, name } projection.
-      if (
-        arg &&
-        typeof arg === 'object' &&
-        'userId' in (arg as Record<string, unknown>) &&
-        'email' in (arg as Record<string, unknown>)
-      ) {
+      if (arg && 'userId' in arg && 'email' in arg) {
         return { from: mockRecipientsFrom };
       }
-      // Default: main eligibility query.
-      mockSelect(arg);
-      return { from: mockFromOrgs };
+      return { from: mockEligibilityFrom };
     },
   },
 }));
 
-const { findEligibleOrgs, findOrgRecipients } = await import('./digestEligibility.js');
+const { findEligibleOrgs, findOrgRecipients, buildEligibilityQuery } =
+  await import('./digestEligibility.js');
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('findEligibleOrgs', () => {
+describe('buildEligibilityQuery — SQL shape (AC #2, AC #14b)', () => {
+  it('emits all five required predicates in the WHERE clause', () => {
+    const { sql } = buildEligibilityQuery(inertDb as never).toSQL();
+
+    // Every spec-required filter must appear in the emitted SQL. A regression
+    // dropping any one of these silently leaks digests to ineligible orgs.
+    expect(sql).toMatch(/"subscriptions"\."status"\s*=\s*\$/);
+    expect(sql).toMatch(/"subscriptions"\."plan"\s*=\s*\$/);
+    expect(sql).toMatch(/"orgs"\."active_dataset_id"\s+is not null/i);
+    expect(sql).toMatch(/"datasets"\."created_at"\s*>=\s*now\(\)\s*-\s*interval\s*'30 days'/);
+    // Member-opted-in EXISTS subquery checks digest_preferences.cadence
+    expect(sql.toLowerCase()).toContain('exists');
+    expect(sql).toMatch(/"digest_preferences"\."cadence"/);
+  });
+
+  it('binds the literal values "active" and "pro" — not their negations', () => {
+    const { params } = buildEligibilityQuery(inertDb as never).toSQL();
+    // params is the param array Drizzle would send to postgres. Both literals
+    // must be present so a typo (e.g., "Active", "PRO") fails the test.
+    expect(params).toContain('active');
+    expect(params).toContain('pro');
+  });
+
+  it('emits a DESC keyset cursor on orgs.id when cursor is supplied', () => {
+    const { sql, params } = buildEligibilityQuery(inertDb as never, 100, 50).toSQL();
+    expect(sql).toMatch(/order by\s+"orgs"\."id"\s+desc/i);
+    expect(sql).toMatch(/"orgs"\."id"\s*<\s*\$/);
+    expect(params).toContain(100);
+  });
+
+  it('omits the cursor predicate on the first page', () => {
+    const first = buildEligibilityQuery(inertDb as never).toSQL();
+    const second = buildEligibilityQuery(inertDb as never, 42).toSQL();
+    // First page WHERE has 5 conditions; second page has 6. Count $-bound
+    // params as a proxy for predicate count: cursor adds one binding.
+    expect(second.params.length).toBe(first.params.length + 1);
+  });
+
+  it('limits to the supplied pageSize, defaulting to 500', () => {
+    const def = buildEligibilityQuery(inertDb as never).toSQL();
+    const small = buildEligibilityQuery(inertDb as never, undefined, 25).toSQL();
+    expect(def.sql).toMatch(/limit\s+\$/i);
+    expect(def.params).toContain(500);
+    expect(small.params).toContain(25);
+  });
+
+  it('joins the three required tables exactly once each in the outer FROM', () => {
+    const { sql } = buildEligibilityQuery(inertDb as never).toSQL();
+    const innerJoinSubs = (sql.match(/inner join\s+"subscriptions"/gi) ?? []).length;
+    const innerJoinDatasets = (sql.match(/inner join\s+"datasets"/gi) ?? []).length;
+    expect(innerJoinSubs).toBe(1);
+    expect(innerJoinDatasets).toBe(1);
+  });
+
+  it('rejects orgs whose only opted-in members have cadence=off', () => {
+    // The EXISTS subquery selects `1 from user_orgs LEFT JOIN
+    // digest_preferences WHERE cadence IS NULL OR cadence <> 'off'`. If
+    // the inequality predicate is dropped, off-cadence orgs leak through.
+    // Drizzle emits <> rather than != for the ne() helper; both are valid
+    // SQL inequality operators.
+    const { sql, params } = buildEligibilityQuery(inertDb as never).toSQL();
+    expect(sql).toMatch(/"digest_preferences"\."cadence"\s+is\s+null/i);
+    expect(sql).toMatch(/"digest_preferences"\."cadence"\s*(?:<>|!=)\s*\$/);
+    expect(params).toContain('off');
+  });
+});
+
+describe('findEligibleOrgs — execute path', () => {
   it('returns rows shaped as EligibleOrg with non-null activeDatasetId', async () => {
-    mockLimit.mockResolvedValueOnce([
+    mockEligibilityLimit.mockResolvedValueOnce([
       { id: 10, name: 'Acme', activeDatasetId: 100, businessProfile: { businessType: 'agency' } },
       { id: 9, name: 'Beta', activeDatasetId: 200, businessProfile: null },
     ]);
@@ -71,7 +139,7 @@ describe('findEligibleOrgs', () => {
   });
 
   it('filters out rows with null activeDatasetId (defensive narrowing)', async () => {
-    mockLimit.mockResolvedValueOnce([
+    mockEligibilityLimit.mockResolvedValueOnce([
       { id: 10, name: 'Acme', activeDatasetId: 100, businessProfile: null },
       { id: 9, name: 'Beta', activeDatasetId: null, businessProfile: null },
     ]);
@@ -83,33 +151,24 @@ describe('findEligibleOrgs', () => {
   });
 
   it('passes the cursor through to the SQL where clause', async () => {
-    mockLimit.mockResolvedValueOnce([]);
+    mockEligibilityLimit.mockResolvedValueOnce([]);
 
     await findEligibleOrgs(50, 100);
 
-    expect(mockLimit).toHaveBeenCalledWith(100);
-    expect(mockWhere).toHaveBeenCalled();
+    expect(mockEligibilityLimit).toHaveBeenCalledWith(100);
+    expect(mockEligibilityWhere).toHaveBeenCalled();
   });
 
   it('defaults pageSize to 500', async () => {
-    mockLimit.mockResolvedValueOnce([]);
+    mockEligibilityLimit.mockResolvedValueOnce([]);
 
     await findEligibleOrgs();
 
-    expect(mockLimit).toHaveBeenCalledWith(500);
-  });
-
-  it('joins through subscriptions and datasets', async () => {
-    mockLimit.mockResolvedValueOnce([]);
-
-    await findEligibleOrgs();
-
-    expect(mockInnerJoinSubs).toHaveBeenCalled();
-    expect(mockInnerJoinDatasets).toHaveBeenCalled();
+    expect(mockEligibilityLimit).toHaveBeenCalledWith(500);
   });
 });
 
-describe('findOrgRecipients', () => {
+describe('findOrgRecipients — execute path', () => {
   it('returns user rows shaped as DigestRecipient', async () => {
     mockRecipientsWhere.mockResolvedValueOnce([
       { userId: 1, email: 'a@x.com', name: 'Alice' },
@@ -124,19 +183,11 @@ describe('findOrgRecipients', () => {
     ]);
   });
 
-  it('returns an empty array when no member matches the filters', async () => {
+  it('returns an empty array when no recipients match', async () => {
     mockRecipientsWhere.mockResolvedValueOnce([]);
 
     const rows = await findOrgRecipients(42);
 
     expect(rows).toEqual([]);
-  });
-
-  it('exercises the LEFT JOIN onto digest_preferences (NULL counts as opted-in)', async () => {
-    mockRecipientsWhere.mockResolvedValueOnce([]);
-
-    await findOrgRecipients(42);
-
-    expect(mockRecipientsLeftJoin).toHaveBeenCalled();
   });
 });

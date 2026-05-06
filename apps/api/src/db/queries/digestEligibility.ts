@@ -12,26 +12,20 @@ export interface EligibleOrg {
 
 const RECENT_DATASET_INTERVAL = sql`now() - interval '30 days'`;
 
+type DrizzleClient = typeof dbAdmin;
+
 /**
- * Single-query enumeration of orgs that should receive a weekly digest.
- *
- * Eligibility rules (Story 9.2 AC #2):
- *   - subscription.status='active' AND subscription.plan='pro'
- *   - org has an activeDataset that was created within the last 30 days
- *   - at least one org member has digest_preferences.cadence != 'off' (NULL
- *     defaults to 'weekly', so a user with no row counts as opted-in)
- *
- * Pagination is keyset on orgs.id DESC. Pass `cursor=undefined` for the first
- * page; pass the smallest id from the previous page as `cursor` for the next.
- *
- * Bypasses RLS via dbAdmin, this is a platform operation, not a user request.
+ * Builds the eligibility query (without executing it). Exposed so tests can
+ * inspect the emitted SQL via `.toSQL()` and assert the predicates without
+ * needing a real database. Use `findEligibleOrgs` for the executable form.
  */
-export async function findEligibleOrgs(
+export function buildEligibilityQuery(
+  client: DrizzleClient,
   cursor?: number,
   pageSize = 500,
-): Promise<EligibleOrg[]> {
+) {
   const memberOptedIn = exists(
-    dbAdmin
+    client
       .select({ x: sql`1` })
       .from(userOrgs)
       .leftJoin(digestPreferences, eq(digestPreferences.userId, userOrgs.userId))
@@ -53,7 +47,7 @@ export async function findEligibleOrgs(
 
   if (cursor !== undefined) conditions.push(lt(orgs.id, cursor));
 
-  const rows = await dbAdmin
+  return client
     .select({
       id: orgs.id,
       name: orgs.name,
@@ -66,7 +60,27 @@ export async function findEligibleOrgs(
     .where(and(...conditions))
     .orderBy(desc(orgs.id))
     .limit(pageSize);
+}
 
+/**
+ * Single-query enumeration of orgs that should receive a weekly digest.
+ *
+ * Eligibility rules (Story 9.2 AC #2):
+ *   - subscription.status='active' AND subscription.plan='pro'
+ *   - org has an activeDataset that was created within the last 30 days
+ *   - at least one org member has digest_preferences.cadence != 'off' (NULL
+ *     defaults to 'weekly', so a user with no row counts as opted-in)
+ *
+ * Pagination is keyset on orgs.id DESC. Pass `cursor=undefined` for the first
+ * page; pass the smallest id from the previous page as `cursor` for the next.
+ *
+ * Bypasses RLS via dbAdmin, this is a platform operation, not a user request.
+ */
+export async function findEligibleOrgs(
+  cursor?: number,
+  pageSize = 500,
+): Promise<EligibleOrg[]> {
+  const rows = await buildEligibilityQuery(dbAdmin, cursor, pageSize);
   // activeDatasetId is non-null per the WHERE clause; narrow the type.
   return rows.filter((r): r is EligibleOrg => r.activeDatasetId !== null);
 }

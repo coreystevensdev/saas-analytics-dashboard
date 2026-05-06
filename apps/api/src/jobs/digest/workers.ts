@@ -1,8 +1,16 @@
 import { Worker } from 'bullmq';
 import type { Job } from 'bullmq';
+import { ANALYTICS_EVENTS } from 'shared/constants';
 
 import { logger } from '../../lib/logger.js';
-import { connectionOptions, QUEUE_ORCHESTRATOR, QUEUE_ORG, QUEUE_SEND } from './queue.js';
+import { trackEvent } from '../../services/analytics/trackEvent.js';
+import {
+  connectionOptions,
+  QUEUE_ORCHESTRATOR,
+  QUEUE_ORG,
+  QUEUE_SEND,
+  type SendJobData,
+} from './queue.js';
 import { handleOrchestratorJob } from './handlers/orchestrator.js';
 import { handlePerOrgJob } from './handlers/perOrg.js';
 import { handlePerSendJob } from './handlers/perSend.js';
@@ -31,6 +39,31 @@ function attachStandardListeners(worker: Worker, label: string): void {
   });
   worker.on('error', (err) => {
     logger.error({ label, err }, 'Digest worker error');
+  });
+}
+
+// AC #8: when retryable failures exhaust BullMQ's attempt budget, the per-send
+// handler's retry-rethrow path means the terminal `digest_failed` event is
+// never emitted from inside the handler. The worker-level failed listener
+// fires once per attempt, so we wait until attemptsMade >= total attempts
+// before emitting the analytics event. Story 9.5's dashboards depend on this
+// to surface sustained provider issues.
+function attachSendFailedAnalytics(worker: Worker): void {
+  worker.on('failed', (job, err) => {
+    if (!job) return;
+    const totalAttempts = job.opts.attempts ?? 1;
+    if (job.attemptsMade < totalAttempts) return;
+
+    const data = job.data as SendJobData | undefined;
+    if (!data) return;
+
+    trackEvent(data.orgId, data.userId, ANALYTICS_EVENTS.DIGEST_FAILED, {
+      reason: 'retries_exhausted',
+      attemptsMade: job.attemptsMade,
+      totalAttempts,
+      message: err instanceof Error ? err.message : String(err),
+      correlationId: data.correlationId,
+    });
   });
 }
 
@@ -79,6 +112,7 @@ export function initDigestSendWorker(): Worker {
     },
   );
   attachStandardListeners(sendWorker, 'send');
+  attachSendFailedAnalytics(sendWorker);
   logger.info(
     { concurrency: SEND_CONCURRENCY, limiterMax: SEND_LIMITER_MAX, limiterDurationMs: SEND_LIMITER_DURATION_MS },
     'Digest send worker started',

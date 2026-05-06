@@ -1,10 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// End-to-end choreography test: replay the actual orchestrator -> per-org ->
-// per-send call chain, asserting that payloads handed off between stages
-// match the receiving handlers' expectations. Doesn't touch BullMQ at runtime
-// (we capture queue.add calls and replay them as direct handler invocations).
-// Doesn't touch a real DB (queries are mocked at the barrel boundary).
+// Choreography test (NOT a true integration test). Replays the actual
+// orchestrator -> per-org -> per-send call chain, asserting that payloads
+// handed off between stages match the receiving handlers' expectations.
+//
+// What this DOES verify:
+//   - Correlation ID threads from orchestrator through every downstream job.
+//   - Per-org failures isolate (AC #4): one org throwing does not block the
+//     others' completion path.
+//   - Privacy boundary (AC #11): send-job payload contains summaryId only,
+//     never summary content (one of the two load-bearing NFR12 checks).
+//   - Per-user dedupe race (subset of AC #8): a user with last_sent_at
+//     within 6 days gets DIGEST_SKIPPED and skips sendEmail.
+//   - Storage shape (subset of AC #5): storeSummary is called with
+//     audience='digest-weekly' on cache miss.
+//
+// What this does NOT verify (covered elsewhere or carry-forward):
+//   - Eligibility SQL filters (Pro tier, recency, cadence) — see
+//     digestEligibility.test.ts SQL-shape tests.
+//   - Curation pipeline behavior — runCurationPipeline, assemblePrompt,
+//     generateInterpretation, validateStatRefs are all mocked here.
+//   - Email rendering — sendEmail is mocked; the React Email template is
+//     covered in templates/digestMinimal.test.tsx.
+//   - Real BullMQ scheduling — queue.add is captured and replayed; the
+//     scheduler/worker contract is covered in cron.test.ts and workers.test.ts.
+//   - Real DB writes / RLS — every query is mocked at the barrel boundary;
+//     the audience-scope filter is covered in aiSummaries.test.ts SQL-shape
+//     tests.
+//
+// Task 10.1's "fixture: seed 3 orgs" wording was aspirational. The repo has
+// no in-process Postgres (no pglite, no testcontainers), so this test layer
+// is the closest within-repo-pattern coverage. Adding a real fixture-DB rig
+// is tracked in epic-9-retro-pending.md.
 
 const mockFindEligibleOrgs = vi.fn();
 const mockFindOrgRecipients = vi.fn();

@@ -1,27 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockWorkerClose = vi.fn().mockResolvedValue(undefined);
-const mockWorkerOn = vi.fn();
 const mockHandleOrchestratorJob = vi.fn().mockResolvedValue(undefined);
 const mockHandlePerOrgJob = vi.fn().mockResolvedValue(undefined);
 const mockHandlePerSendJob = vi.fn().mockResolvedValue(undefined);
+const mockTrackEvent = vi.fn();
 
 interface WorkerCall {
   name: string;
   processor: (job: unknown) => Promise<unknown>;
   opts: { concurrency: number; limiter?: { max: number; duration: number } };
+  listeners: Map<string, Array<(...args: unknown[]) => void>>;
 }
 const workerCalls: WorkerCall[] = [];
 
 class FakeWorker {
   close = mockWorkerClose;
-  on = mockWorkerOn;
+  listeners = new Map<string, Array<(...args: unknown[]) => void>>();
   constructor(
     public name: string,
     processor: (job: unknown) => Promise<unknown>,
     opts: WorkerCall['opts'],
   ) {
-    workerCalls.push({ name, processor, opts });
+    workerCalls.push({ name, processor, opts, listeners: this.listeners });
+  }
+  on(event: string, fn: (...args: unknown[]) => void) {
+    const arr = this.listeners.get(event) ?? [];
+    arr.push(fn);
+    this.listeners.set(event, arr);
+    return this;
+  }
+  emit(event: string, ...args: unknown[]) {
+    for (const fn of this.listeners.get(event) ?? []) fn(...args);
   }
 }
 
@@ -38,6 +48,7 @@ vi.mock('../../lib/logger.js', () => ({
 vi.mock('./handlers/orchestrator.js', () => ({ handleOrchestratorJob: mockHandleOrchestratorJob }));
 vi.mock('./handlers/perOrg.js', () => ({ handlePerOrgJob: mockHandlePerOrgJob }));
 vi.mock('./handlers/perSend.js', () => ({ handlePerSendJob: mockHandlePerSendJob }));
+vi.mock('../../services/analytics/trackEvent.js', () => ({ trackEvent: mockTrackEvent }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -132,6 +143,82 @@ describe('initDigestSendWorker', () => {
     const a = initDigestSendWorker();
     const b = initDigestSendWorker();
     expect(a).toBe(b);
+  });
+});
+
+describe('send worker retries-exhausted analytics (AC #8)', () => {
+  const sendJobData = {
+    userId: 7,
+    orgId: 42,
+    summaryId: 999,
+    weekStart: new Date('2026-05-03T00:00:00Z'),
+    userEmail: 'a@x.com',
+    orgName: 'Acme',
+    correlationId: 'corr-1',
+  };
+
+  it('emits DIGEST_FAILED only once attempts are exhausted', async () => {
+    const { initDigestSendWorker } = await import('./workers.js');
+    initDigestSendWorker();
+    const w = findWorker('digest-send');
+
+    const job = {
+      id: 'send-x',
+      data: sendJobData,
+      attemptsMade: 1,
+      opts: { attempts: 3 },
+    };
+
+    (w as unknown as { listeners: Map<string, Array<(...args: unknown[]) => void>> })
+      .listeners.get('failed')!
+      .forEach((fn) => fn(job, new Error('rate limited')));
+
+    expect(mockTrackEvent).not.toHaveBeenCalled();
+  });
+
+  it('emits DIGEST_FAILED with retries_exhausted reason when attemptsMade hits the budget', async () => {
+    const { initDigestSendWorker } = await import('./workers.js');
+    initDigestSendWorker();
+    const w = findWorker('digest-send');
+
+    const finalJob = {
+      id: 'send-y',
+      data: sendJobData,
+      attemptsMade: 3,
+      opts: { attempts: 3 },
+    };
+
+    (w as unknown as { listeners: Map<string, Array<(...args: unknown[]) => void>> })
+      .listeners.get('failed')!
+      .forEach((fn) => fn(finalJob, new Error('still rate limited')));
+
+    expect(mockTrackEvent).toHaveBeenCalledWith(
+      42,
+      7,
+      'digest.failed',
+      expect.objectContaining({
+        reason: 'retries_exhausted',
+        attemptsMade: 3,
+        totalAttempts: 3,
+        message: 'still rate limited',
+        correlationId: 'corr-1',
+      }),
+    );
+  });
+
+  it('does not emit DIGEST_FAILED for the org or orchestrator workers', async () => {
+    const { initDigestOrgWorker, initDigestOrchestratorWorker } = await import('./workers.js');
+    initDigestOrgWorker();
+    initDigestOrchestratorWorker();
+
+    const orgW = findWorker('digest-org');
+    const orchW = findWorker('digest-orchestrator');
+
+    const orgJob = { id: 'org-1', data: {}, attemptsMade: 3, opts: { attempts: 3 } };
+    orgW.listeners.get('failed')?.forEach((fn) => fn(orgJob, new Error('boom')));
+    orchW.listeners.get('failed')?.forEach((fn) => fn(orgJob, new Error('boom')));
+
+    expect(mockTrackEvent).not.toHaveBeenCalled();
   });
 });
 

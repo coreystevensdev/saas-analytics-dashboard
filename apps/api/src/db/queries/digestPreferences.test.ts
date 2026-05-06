@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFindFirst = vi.fn();
 const mockReturning = vi.fn();
 const mockOnConflictDoNothing = vi.fn(() => ({ returning: mockReturning }));
+const mockOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
 const mockInsertValues = vi.fn(() => ({
   onConflictDoNothing: mockOnConflictDoNothing,
+  onConflictDoUpdate: mockOnConflictDoUpdate,
   returning: mockReturning,
 }));
 const mockUpdateWhere = vi.fn().mockResolvedValue(undefined);
@@ -34,6 +36,10 @@ beforeEach(() => {
   mockFindFirst.mockReset();
   mockReturning.mockReset();
   mockUpdateWhere.mockReset().mockResolvedValue(undefined);
+  mockOnConflictDoUpdate.mockReset().mockResolvedValue(undefined);
+  mockInsertValues.mockClear();
+  mockUpdate.mockClear();
+  mockInsert.mockClear();
 });
 
 describe('getByUserId', () => {
@@ -99,25 +105,41 @@ describe('markSent', () => {
 });
 
 describe('setCadence', () => {
-  it('writes the cadence string', async () => {
+  it('upserts so a missing row never silently no-ops', async () => {
     await setCadence(7, 'monthly', db);
 
-    expect(mockUpdateSet).toHaveBeenCalledWith(
-      expect.objectContaining({ cadence: 'monthly', updatedAt: expect.any(Date) }),
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 7, cadence: 'monthly' }),
     );
+    expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({ cadence: 'monthly', updatedAt: expect.any(Date) }),
+      }),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
 
 describe('markUnsubscribed', () => {
-  it('flips cadence to off and stamps unsubscribedAt', async () => {
+  it('upserts to off and stamps unsubscribedAt regardless of prior row state', async () => {
     await markUnsubscribed(7, db);
 
-    expect(mockUpdateSet).toHaveBeenCalledWith(
+    expect(mockInsertValues).toHaveBeenCalledWith(
       expect.objectContaining({
+        userId: 7,
         cadence: 'off',
         unsubscribedAt: expect.any(Date),
-        updatedAt: expect.any(Date),
       }),
     );
+    expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({
+          cadence: 'off',
+          unsubscribedAt: expect.any(Date),
+          updatedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

@@ -38,6 +38,13 @@ export async function upsertDefaults(
   return existing;
 }
 
+// markSent assumes the row exists, the per-send handler always calls
+// upsertDefaults first (so the row is guaranteed before mark-time). Kept as a
+// plain UPDATE because the digest pipeline's invariant is "preferences row
+// exists before we send"; if it doesn't, that's a real bug and a silent
+// no-op would hide it. setCadence and markUnsubscribed take the opposite
+// posture (upsert) because their callers come from settings UI and email
+// links, where the row may not exist yet.
 export async function markSent(
   userId: number,
   sentAt: Date,
@@ -54,10 +61,14 @@ export async function setCadence(
   cadence: DigestCadence,
   client: typeof db | DbTransaction,
 ) {
+  const now = new Date();
   await client
-    .update(digestPreferences)
-    .set({ cadence, updatedAt: new Date() })
-    .where(eq(digestPreferences.userId, userId));
+    .insert(digestPreferences)
+    .values({ userId, cadence })
+    .onConflictDoUpdate({
+      target: digestPreferences.userId,
+      set: { cadence, updatedAt: now },
+    });
 }
 
 export async function markUnsubscribed(
@@ -66,7 +77,10 @@ export async function markUnsubscribed(
 ) {
   const now = new Date();
   await client
-    .update(digestPreferences)
-    .set({ cadence: 'off', unsubscribedAt: now, updatedAt: now })
-    .where(eq(digestPreferences.userId, userId));
+    .insert(digestPreferences)
+    .values({ userId, cadence: 'off', unsubscribedAt: now })
+    .onConflictDoUpdate({
+      target: digestPreferences.userId,
+      set: { cadence: 'off', unsubscribedAt: now, updatedAt: now },
+    });
 }
