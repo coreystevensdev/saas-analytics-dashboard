@@ -24,3 +24,25 @@ export async function withRlsContext<T>(
     return fn(tx);
   });
 }
+
+/**
+ * User-scoped sibling of withRlsContext for tables whose RLS policy reads
+ * app.current_user_id (e.g., digest_preferences). Org-scoped tables stay on
+ * withRlsContext, separate helpers keep call-site signatures honest about
+ * which RLS scope each query needs.
+ */
+export async function withUserRlsContext<T>(
+  userId: number,
+  isAdmin: boolean,
+  fn: (tx: DbTransaction) => Promise<T>,
+): Promise<T> {
+  const safeUserId = Math.trunc(userId);
+  if (!Number.isFinite(safeUserId) || safeUserId !== userId) throw new Error('userId must be a finite integer');
+  if (typeof isAdmin !== 'boolean') throw new Error('isAdmin must be a boolean');
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql.raw(`SET LOCAL app.current_user_id = '${String(safeUserId)}'`));
+    await tx.execute(sql.raw(`SET LOCAL app.is_admin = '${String(isAdmin)}'`));
+    return fn(tx);
+  });
+}

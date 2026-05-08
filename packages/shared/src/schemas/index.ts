@@ -61,3 +61,15 @@ export {
 } from './subscriptions.js';
 
 export type { CheckoutSession, PortalSession, SubscriptionStatus } from './subscriptions.js';
+
+export {
+  digestCadenceSchema,
+  updateEmailPreferencesSchema,
+  emailPreferencesResponseSchema,
+} from './emailPreferences.js';
+
+export type {
+  DigestCadence,
+  UpdateEmailPreferencesInput,
+  EmailPreferencesResponse,
+} from './emailPreferences.js';

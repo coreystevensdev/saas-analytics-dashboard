@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, ShieldCheck, Activity, X, Users, Database, SlidersHorizontal, Plug, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Upload, ShieldCheck, Activity, X, Users, Database, SlidersHorizontal, Plug, DollarSign, Mail } from 'lucide-react';
 import { TellsightLogo } from '@/components/common/TellsightLogo';
 import { cn } from '@/lib/utils';
 import { useSidebar } from '@/app/dashboard/contexts/SidebarContext';
@@ -20,6 +20,7 @@ const SETTINGS_ITEMS = [
   { href: '/settings/integrations', label: 'Integrations', icon: Plug },
   { href: '/settings/financials', label: 'Financial baseline', icon: DollarSign },
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
+  { href: '/settings/email', label: 'Email', icon: Mail },
 ] as const;
 
 function SidebarNav({ orgName, isAdmin, onNavigate }: { orgName?: string; isAdmin?: boolean; onNavigate?: () => void }) {

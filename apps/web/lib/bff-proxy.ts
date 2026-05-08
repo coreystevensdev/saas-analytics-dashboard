@@ -39,6 +39,21 @@ export function proxyPost(upstreamPath: string) {
   };
 }
 
+export function proxyPut(upstreamPath: string) {
+  return async (request: NextRequest) => {
+    try {
+      const res = await fetch(`${webEnv.API_INTERNAL_URL}${upstreamPath}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: cookies(request) },
+        body: await request.text(),
+      });
+      return NextResponse.json(await res.json(), { status: res.status });
+    } catch {
+      return UPSTREAM_ERROR_RESPONSE;
+    }
+  };
+}
+
 export function proxyPostWithCookies(upstreamPath: string) {
   return async (request: NextRequest) => {
     try {

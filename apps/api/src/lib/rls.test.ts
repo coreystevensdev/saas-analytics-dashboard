@@ -22,7 +22,7 @@ vi.mock('drizzle-orm', () => ({
   ),
 }));
 
-const { withRlsContext } = await import('./rls.js');
+const { withRlsContext, withUserRlsContext } = await import('./rls.js');
 
 describe('withRlsContext', () => {
   beforeEach(() => {
@@ -125,5 +125,117 @@ describe('withRlsContext', () => {
     await withRlsContext(20, false, async () => 'orgB');
 
     expect(orgIds).toEqual(['10', '20']);
+  });
+});
+
+describe('withUserRlsContext', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTransaction.mockImplementation(async (fn) => {
+      const tx = { execute: mockExecute };
+      return fn(tx);
+    });
+  });
+
+  it('sets user_id and is_admin via SET LOCAL before running the callback', async () => {
+    const callOrder: string[] = [];
+    mockExecute.mockImplementation(() => { callOrder.push('setLocal'); });
+
+    await withUserRlsContext(7, false, async () => {
+      callOrder.push('callback');
+      return 'result';
+    });
+
+    expect(callOrder).toEqual(['setLocal', 'setLocal', 'callback']);
+  });
+
+  it('passes the transaction to the callback function', async () => {
+    let receivedTx: unknown;
+
+    await withUserRlsContext(1, false, async (tx) => {
+      receivedTx = tx;
+      return null;
+    });
+
+    expect(receivedTx).toHaveProperty('execute', mockExecute);
+  });
+
+  it('returns the callback result', async () => {
+    const result = await withUserRlsContext(1, false, async () => 'hello');
+    expect(result).toBe('hello');
+  });
+
+  it('sets current_user_id as a string value in raw SQL', async () => {
+    await withUserRlsContext(42, false, async () => null);
+
+    const firstCall = mockExecute.mock.calls[0]![0];
+    expect(firstCall.query).toContain('app.current_user_id');
+    expect(firstCall.query).toContain("'42'");
+  });
+
+  it('sets is_admin to "true" for admin users', async () => {
+    await withUserRlsContext(1, true, async () => null);
+
+    const secondCall = mockExecute.mock.calls[1]![0];
+    expect(secondCall.query).toContain('app.is_admin');
+    expect(secondCall.query).toContain("'true'");
+  });
+
+  it('sets is_admin to "false" for non-admin users', async () => {
+    await withUserRlsContext(1, false, async () => null);
+
+    const secondCall = mockExecute.mock.calls[1]![0];
+    expect(secondCall.query).toContain("'false'");
+  });
+
+  it('propagates errors from the callback (fail-closed)', async () => {
+    await expect(
+      withUserRlsContext(1, false, async () => {
+        throw new Error('query failed');
+      }),
+    ).rejects.toThrow('query failed');
+  });
+
+  it('propagates errors from SET LOCAL (fail-closed)', async () => {
+    mockExecute.mockRejectedValueOnce(new Error('SET LOCAL failed'));
+
+    await expect(
+      withUserRlsContext(1, false, async () => 'should not reach'),
+    ).rejects.toThrow('SET LOCAL failed');
+  });
+
+  it('rejects non-finite userId values', async () => {
+    await expect(
+      withUserRlsContext(NaN, false, async () => null),
+    ).rejects.toThrow('userId must be a finite integer');
+
+    await expect(
+      withUserRlsContext(Infinity, false, async () => null),
+    ).rejects.toThrow('userId must be a finite integer');
+  });
+
+  it('rejects non-boolean isAdmin values', async () => {
+    await expect(
+      withUserRlsContext(1, 'true' as unknown as boolean, async () => null),
+    ).rejects.toThrow('isAdmin must be a boolean');
+  });
+
+  it('truncates fractional userId before stringifying', async () => {
+    await expect(
+      withUserRlsContext(3.7, false, async () => null),
+    ).rejects.toThrow('userId must be a finite integer');
+  });
+
+  it('user A context does not bleed into user B calls', async () => {
+    const userIds: string[] = [];
+    mockExecute.mockImplementation((stmt: { query: string }) => {
+      const match = stmt.query?.match(/current_user_id = '(\d+)'/);
+      if (match) userIds.push(match[1]!);
+    });
+
+    await withUserRlsContext(11, false, async () => 'userA');
+    await withUserRlsContext(22, false, async () => 'userB');
+
+    expect(userIds).toEqual(['11', '22']);
   });
 });

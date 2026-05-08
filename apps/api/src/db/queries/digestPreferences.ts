@@ -71,6 +71,21 @@ export async function setCadence(
     });
 }
 
+export async function setTimezone(
+  userId: number,
+  timezone: string,
+  client: typeof db | DbTransaction,
+) {
+  const now = new Date();
+  await client
+    .insert(digestPreferences)
+    .values({ userId, timezone })
+    .onConflictDoUpdate({
+      target: digestPreferences.userId,
+      set: { timezone, updatedAt: now },
+    });
+}
+
 export async function markUnsubscribed(
   userId: number,
   client: typeof db | DbTransaction,

@@ -58,8 +58,16 @@ export default async function UnsubscribeDigestPage({
             <Link href="/" className="text-primary hover:underline">
               Back to Tellsight
             </Link>
+            {result.success && (
+              <Link
+                href="/settings/email"
+                className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90"
+              >
+                Resubscribe
+              </Link>
+            )}
             {!result.success && (
-              <Link href="/settings/preferences" className="text-muted-foreground hover:text-foreground">
+              <Link href="/settings/email" className="text-muted-foreground hover:text-foreground">
                 Manage preferences
               </Link>
             )}
