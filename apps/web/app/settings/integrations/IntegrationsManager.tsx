@@ -1,13 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Mail, RefreshCw, Loader2, AlertCircle, X, Link2, Link2Off } from 'lucide-react';
+import { RefreshCw, Loader2, AlertCircle, X, Link2, Link2Off } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-
-interface DigestPrefs {
-  digestOptIn: boolean;
-}
 
 interface QbStatus {
   connected: boolean;
@@ -20,22 +16,16 @@ interface QbStatus {
 }
 
 export default function IntegrationsManager() {
-  const [digest, setDigest] = useState<DigestPrefs | null>(null);
   const [qb, setQb] = useState<QbStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [digestSaving, setDigestSaving] = useState(false);
   const [qbAction, setQbAction] = useState<'connecting' | 'syncing' | 'disconnecting' | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [digestRes, qbRes] = await Promise.all([
-        apiClient<DigestPrefs>('/preferences/digest'),
-        apiClient<QbStatus>('/integrations/quickbooks/status').catch(() => ({
-          data: { connected: false } as QbStatus,
-        })),
-      ]);
-      setDigest(digestRes.data);
+      const qbRes = await apiClient<QbStatus>('/integrations/quickbooks/status').catch(() => ({
+        data: { connected: false } as QbStatus,
+      }));
       setQb(qbRes.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load integrations');
@@ -45,25 +35,6 @@ export default function IntegrationsManager() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  async function toggleDigest() {
-    if (!digest) return;
-    const next = !digest.digestOptIn;
-    setDigestSaving(true);
-    setDigest({ digestOptIn: next });
-
-    try {
-      await apiClient('/preferences/digest', {
-        method: 'PATCH',
-        body: JSON.stringify({ digestOptIn: next }),
-      });
-    } catch (err) {
-      setDigest({ digestOptIn: !next });
-      setError(err instanceof Error ? err.message : 'Failed to update preference');
-    } finally {
-      setDigestSaving(false);
-    }
-  }
 
   async function connectQb() {
     setQbAction('connecting');
@@ -134,50 +105,6 @@ export default function IntegrationsManager() {
       )}
 
       <div className="flex flex-col gap-4">
-        {/* Email Digest */}
-        <section className="rounded-lg border border-border bg-card px-5 py-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Mail className="h-4.5 w-4.5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Weekly Email Digest</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Plain-English summary of your business data, delivered every Sunday.
-                </p>
-              </div>
-            </div>
-            {digest && (
-              <button
-                role="switch"
-                aria-checked={digest.digestOptIn}
-                aria-label="Weekly email digest"
-                disabled={digestSaving}
-                onClick={toggleDigest}
-                className={cn(
-                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
-                  digest.digestOptIn ? 'bg-primary' : 'bg-muted',
-                )}
-              >
-                <span
-                  className={cn(
-                    'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200',
-                    digest.digestOptIn ? 'translate-x-5' : 'translate-x-0',
-                  )}
-                />
-              </button>
-            )}
-          </div>
-          <div className="mt-3 ml-12">
-            <p className="text-xs text-muted-foreground">
-              {digest?.digestOptIn
-                ? 'You\u2019ll receive a weekly email with top insights from your active dataset. Pro plans get full AI analysis; free plans get a preview.'
-                : 'Email digest is turned off. You won\u2019t receive weekly summary emails.'}
-            </p>
-          </div>
-        </section>
-
         {/* QuickBooks */}
         <section className="rounded-lg border border-border bg-card px-5 py-5">
           <div className="flex items-start justify-between gap-4">

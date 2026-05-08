@@ -13,7 +13,6 @@ import { orgProfileRouter } from './orgProfile.js';
 import { orgFinancialsRouter } from './orgFinancials.js';
 import { roleGuard } from '../middleware/roleGuard.js';
 import { integrationsRouter } from './integrations.js';
-import { digestPreferencesRouter } from './digestPreferences.js';
 
 const protectedRouter = Router();
 
@@ -32,7 +31,6 @@ protectedRouter.use('/shares', shareRouter);
 protectedRouter.use('/org', orgProfileRouter);
 protectedRouter.use('/org', orgFinancialsRouter);
 protectedRouter.use('/integrations', integrationsRouter);
-protectedRouter.use('/preferences', digestPreferencesRouter);
 protectedRouter.use('/admin', roleGuard('admin'), adminRouter);
 
 export default protectedRouter;
